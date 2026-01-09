@@ -572,3 +572,14 @@ button:hover {
     font-size: 11px;
     margin-top: 2px;
 }
+
+/* Nerve Complex SVG Container */
+#nerve-complex-svg-container {
+    position: relative;
+    background: #fafafa;
+}
+
+#nerve-complex-svg-container svg {
+    display: block;
+    margin: 0 auto;
+}

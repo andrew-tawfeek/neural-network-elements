@@ -180,10 +180,18 @@
                                     </div>
                                 </div>
                                 <div class="plot-window">
-                                    <div class="window-header">Dual Graph</div>
+                                    <div class="window-header">Dual Graph / Nerve Complex</div>
+                                    <div class="window-controls" style="margin-top: 0; margin-bottom: 10px; padding-top: 5px; border-top: none;">
+                                        <label style="font-size: 12px;">View:</label>
+                                        <div class="switch-toggle" id="dual-nerve-switch" onclick="toggleDualNerve()">
+                                        </div>
+                                        <span id="dual-nerve-label" style="font-size: 12px;">Dual Graph</span>
+                                    </div>
                                     <canvas id="dual-graph-canvas" width="300" height="300"></canvas>
-                                    <div class="plot-legend">Graph of adjacent regions</div>
-                                    <div style="margin-top: 10px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 5px;">
+                                    <div id="nerve-complex-svg-container" style="display: none; width: 300px; height: 300px; overflow: auto; border: 1px solid #e0e0e0; border-radius: 4px;"></div>
+                                    <div class="plot-legend" id="dual-graph-legend">Graph of adjacent regions</div>
+                                    <div class="plot-legend" id="nerve-complex-legend" style="display: none;">Poset of overlapping neuron activation regions</div>
+                                    <div id="dual-graph-export" style="margin-top: 10px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 5px;">
                                         <select id="export-format" style="font-size: 12px; padding: 2px 4px;">
                                             <option value="json">JSON</option>
                                             <option value="python">Python</option>
@@ -217,6 +225,7 @@
     <script src="js/decision-boundary.js"></script>
     <script src="js/dual-graph.js"></script>
     <script src="js/binary-display.js"></script>
+    <script src="js/nerve-complex-toggle.js"></script>
     <script src="js/visualization-3d.js"></script>
     <script src="js/training.js"></script>
     <script src="js/file-manager.js"></script>

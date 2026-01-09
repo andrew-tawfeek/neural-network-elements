@@ -281,6 +281,11 @@ const DecisionBoundary = {
         // Pass data to dual graph module
         DualGraph.render(dualCtx, nodes, edges);
 
+        // Update nerve complex if active
+        if (typeof NerveComplexToggle !== 'undefined') {
+            NerveComplexToggle.updateIfActive();
+        }
+
         // Draw current point if it exists
         if (this.currentPoint) {
             const px = ((this.currentPoint.x - xMin) / (xMax - xMin)) * 300;
@@ -363,17 +368,21 @@ const DecisionBoundary = {
                 button.className = 'neuron-button';
                 button.textContent = (neuron + 1).toString();
                 button.title = `Toggle highlight for Hidden ${layer} Neuron ${neuron + 1}. Shows regions where ALL selected neurons are ON.`;
-                
+
                 const globalNeuronIndex = neuronIndex;
+
+                // Add data attribute for programmatic selection
+                button.setAttribute('data-global-index', globalNeuronIndex);
+
                 button.addEventListener('click', () => {
                     this.toggleNeuronHighlight(globalNeuronIndex, button);
                 });
-                
+
                 // Restore selection state if this neuron was previously selected
                 if (this.highlightedNeurons.has(globalNeuronIndex)) {
                     button.classList.add('active');
                 }
-                
+
                 layerGroup.appendChild(button);
                 neuronIndex++;
             }
@@ -482,6 +491,52 @@ const DecisionBoundary = {
         if (zoomDisplay) {
             zoomDisplay.textContent = Math.round(this.zoomLevel * 100) + '%';
         }
+    },
+
+    /**
+     * Clear all neuron highlights and restore original visualization state
+     * Used when clicking a new simplex in the nerve complex
+     */
+    clearNeuronHighlights() {
+        // Clear the highlighted neurons set
+        this.highlightedNeurons.clear();
+        this.highlightedNeuron = null;
+
+        // Clear all button active states
+        const buttons = document.querySelectorAll('.neuron-button');
+        buttons.forEach(btn => btn.classList.remove('active'));
+
+        // Note: We don't call update() here to avoid redundant redraws
+        // The calling code should call update() after making all changes
+    },
+
+    /**
+     * Programmatically select a neuron by its global index
+     * Adds the neuron to the highlighted set and updates the corresponding button
+     * @param {number} globalIndex - The global index of the neuron to select
+     */
+    selectNeuron(globalIndex) {
+        // Add to highlighted neurons set
+        this.highlightedNeurons.add(globalIndex);
+
+        // Update legacy single neuron for backward compatibility
+        if (this.highlightedNeurons.size === 1) {
+            this.highlightedNeuron = globalIndex;
+        }
+
+        // Find and activate the corresponding button
+        const buttons = document.querySelectorAll('.neuron-button');
+
+        // Find the button with matching data-global-index
+        buttons.forEach(btn => {
+            const btnIndex = parseInt(btn.getAttribute('data-global-index'));
+            if (btnIndex === globalIndex) {
+                btn.classList.add('active');
+            }
+        });
+
+        // Note: We don't call update() here to avoid redundant redraws
+        // The calling code should call update() after making all changes
     },
 };
 
