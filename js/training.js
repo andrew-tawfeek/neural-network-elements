@@ -8,6 +8,12 @@ const TrainingManager = {
     trainingInterval: 1000, // milliseconds between training steps (1 second default)
     stepCounter: 0, // Track training steps for loss graph
 
+    // Performance optimization flags
+    visualUpdateThrottle: 200, // Update visualizations every 200ms during fast training
+    lastVisualUpdate: 0, // Timestamp of last visual update
+    pendingVisualUpdate: false, // Flag for pending RAF update
+    statsUpdateInterval: 10, // Update loss display every N steps during fast training
+
     addData() {
         const inputs = [];
         for (let i = 0; i < window.net.architecture[0]; i++) {
@@ -54,72 +60,133 @@ const TrainingManager = {
         this.updateDataDisplay();
     },
 
-    trainStep() {
+    trainStep(skipVisualization = false) {
         if (this.data.length === 0) return;
         const lr = parseFloat(document.getElementById('learning-rate').value);
         let totalLoss = 0;
         this.data.forEach(p => totalLoss += window.net.backward(p.inputs, p.targets, lr));
         const avgLoss = totalLoss / this.data.length;
-        
+
         // Increment step counter
         this.stepCounter++;
-        
-        // Update loss display
-        document.getElementById('error').innerHTML = `Loss: ${avgLoss.toFixed(4)} | Step: ${this.stepCounter}`;
-        
-        // Add to loss graph
+
+        // Always update loss graph (lightweight operation)
         if (typeof LossGraph !== 'undefined') {
             LossGraph.addLossValue(avgLoss, this.stepCounter);
         }
-        
-        createWeights();
-        forward();
+
+        // Update loss display every N steps during continuous training
+        if (!this.isContinuousTraining || this.stepCounter % this.statsUpdateInterval === 0) {
+            document.getElementById('error').innerHTML = `Loss: ${avgLoss.toFixed(4)} | Step: ${this.stepCounter}`;
+        }
+
+        // Skip expensive visualizations during fast continuous training
+        if (!skipVisualization) {
+            createWeights();
+            forward();
+        } else {
+            // Schedule a throttled visual update
+            this.scheduleVisualUpdate();
+        }
+
+        return avgLoss;
+    },
+
+    scheduleVisualUpdate() {
+        const now = performance.now();
+
+        // Check if enough time has passed since last visual update
+        if (now - this.lastVisualUpdate >= this.visualUpdateThrottle) {
+            this.performVisualUpdate();
+        } else if (!this.pendingVisualUpdate) {
+            // Schedule an update using requestAnimationFrame
+            this.pendingVisualUpdate = true;
+            requestAnimationFrame(() => {
+                const elapsed = performance.now() - this.lastVisualUpdate;
+                if (elapsed >= this.visualUpdateThrottle) {
+                    this.performVisualUpdate();
+                }
+            });
+        }
+    },
+
+    performVisualUpdate() {
+        this.lastVisualUpdate = performance.now();
+        this.pendingVisualUpdate = false;
+
+        // Only update network visualization and binary display during training
+        // Skip createWeights() as it's expensive and not critical during training
+        if (window.net && window.net.activations) {
+            // Update network visualization
+            if (typeof NetworkVisualization !== 'undefined') {
+                NetworkVisualization.draw(false);
+            }
+
+            // Update binary display (includes decision boundary if 2D)
+            if (typeof BinaryDisplay !== 'undefined') {
+                BinaryDisplay.update();
+            }
+        }
     },
 
     trainBatch() {
-        for (let i = 0; i < 100; i++) this.trainStep();
+        // Train 100 steps with skipped visualization, then update once at the end
+        for (let i = 0; i < 99; i++) {
+            this.trainStep(true);
+        }
+        // Final step updates visualizations
+        this.trainStep(false);
     },
 
     startContinuousTraining() {
         if (this.isContinuousTraining || this.data.length === 0) return;
-        
+
         this.isContinuousTraining = true;
+
+        // Determine if we should skip visualizations based on training speed
+        const skipVisualization = this.trainingInterval < 100;
+
+        // Use setInterval for the training loop
         this.continuousTrainingTimer = setInterval(() => {
-            this.trainStep();
-        }, this.trainingInterval); // Use configurable interval
-        
+            this.trainStep(skipVisualization);
+        }, this.trainingInterval);
+
         // Add visual feedback
         const trainButton = document.querySelector('button.btn-train');
         if (trainButton) {
             trainButton.style.backgroundColor = '#e74c3c';
             trainButton.style.boxShadow = '0 0 10px rgba(231, 76, 60, 0.5)';
         }
-        
+
         // Update play/pause buttons
         this.updatePlayPauseButtons();
-        
-        console.log('Continuous training started');
+
+        console.log(`Continuous training started (interval: ${this.trainingInterval}ms, optimized: ${skipVisualization})`);
     },
 
     stopContinuousTraining() {
         if (!this.isContinuousTraining) return;
-        
+
         this.isContinuousTraining = false;
         if (this.continuousTrainingTimer) {
             clearInterval(this.continuousTrainingTimer);
             this.continuousTrainingTimer = null;
         }
-        
+
+        // Force a final complete visual update when stopping
+        createWeights();
+        forward();
+
         // Remove visual feedback
         const trainButton = document.querySelector('button.btn-train');
         if (trainButton) {
             trainButton.style.backgroundColor = '';
             trainButton.style.boxShadow = '';
         }
-        
+
         // Update play/pause buttons
         this.updatePlayPauseButtons();
-        
+
         console.log('Continuous training stopped');
     },
 
