@@ -14,6 +14,12 @@ const TrainingManager = {
     pendingVisualUpdate: false, // Flag for pending RAF update
     statsUpdateInterval: 10, // Update loss display every N steps during fast training
 
+    // Mini-batch training
+    batchSize: 32, // Default batch size
+    shuffleData: true, // Shuffle data between epochs
+    currentEpoch: 0, // Track current epoch
+    useMiniBatch: true, // Enable mini-batch training
+
     addData() {
         const inputs = [];
         for (let i = 0; i < window.net.architecture[0]; i++) {
@@ -60,12 +66,46 @@ const TrainingManager = {
         this.updateDataDisplay();
     },
 
+    shuffleArray(array) {
+        // Fisher-Yates shuffle
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    },
+
     trainStep(skipVisualization = false) {
         if (this.data.length === 0) return;
         const lr = parseFloat(document.getElementById('learning-rate').value);
+
         let totalLoss = 0;
-        this.data.forEach(p => totalLoss += window.net.backward(p.inputs, p.targets, lr));
-        const avgLoss = totalLoss / this.data.length;
+        let numBatches = 0;
+
+        if (this.useMiniBatch && this.data.length > this.batchSize) {
+            // Mini-batch training
+            // Shuffle data at the start of each epoch
+            if (this.shuffleData && this.stepCounter % Math.ceil(this.data.length / this.batchSize) === 0) {
+                this.shuffleArray(this.data);
+            }
+
+            // Get current batch
+            const batchStart = (this.stepCounter * this.batchSize) % this.data.length;
+            const batchEnd = Math.min(batchStart + this.batchSize, this.data.length);
+            const batch = this.data.slice(batchStart, batchEnd);
+
+            // Train on batch
+            batch.forEach(p => totalLoss += window.net.backward(p.inputs, p.targets, lr));
+            totalLoss /= batch.length;
+            numBatches = 1;
+        } else {
+            // Full-batch training (original behavior)
+            this.data.forEach(p => totalLoss += window.net.backward(p.inputs, p.targets, lr));
+            totalLoss /= this.data.length;
+            numBatches = 1;
+        }
+
+        const avgLoss = totalLoss;
 
         // Increment step counter
         this.stepCounter++;

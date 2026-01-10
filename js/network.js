@@ -7,10 +7,56 @@ class MultiLayerNetwork {
         this.biases = []
         this.activations = []
         this.zValues = []
+
+        // Adam optimizer state
+        this.adamM_w = [] // First moment (momentum) for weights
+        this.adamV_w = [] // Second moment (RMSprop) for weights
+        this.adamM_b = [] // First moment for biases
+        this.adamV_b = [] // Second moment for biases
+        this.adamT = 0    // Time step for bias correction
+
+        // Optimizer hyperparameters
+        this.beta1 = 0.9      // Momentum decay
+        this.beta2 = 0.999    // RMSprop decay
+        this.epsilon = 1e-8   // Numerical stability
+        this.gradClipThreshold = 5.0  // Gradient clipping threshold
+
+        // Initialize weights with Xavier/He initialization
         for (let i = 0; i < this.layers - 1; i++) {
-            this.weights.push(this.rand(a[i + 1], a[i]))
-            this.biases.push(this.rand(a[i + 1], 1))
+            this.weights.push(this.heInitialization(a[i + 1], a[i]))
+            this.biases.push(this.zeros(a[i + 1], 1))
+
+            // Initialize Adam moments
+            this.adamM_w.push(this.zeros(a[i + 1], a[i]))
+            this.adamV_w.push(this.zeros(a[i + 1], a[i]))
+            this.adamM_b.push(this.zeros(a[i + 1], 1))
+            this.adamV_b.push(this.zeros(a[i + 1], 1))
         }
+    }
+
+    zeros(r, c) {
+        const m = []
+        for (let i = 0; i < r; i++) {
+            m[i] = []
+            for (let j = 0; j < c; j++) m[i][j] = 0
+        }
+        return m
+    }
+
+    heInitialization(r, c) {
+        // He initialization for ReLU networks: std = sqrt(2/n_in)
+        const std = Math.sqrt(2.0 / c)
+        const m = []
+        for (let i = 0; i < r; i++) {
+            m[i] = []
+            for (let j = 0; j < c; j++) {
+                // Box-Muller transform for normal distribution
+                const u1 = Math.random()
+                const u2 = Math.random()
+                m[i][j] = std * Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2)
+            }
+        }
+        return m
     }
     
     rand(r, c) {
@@ -74,10 +120,16 @@ class MultiLayerNetwork {
             loss += err[i] * err[i];
         }
         loss /= 2;
+
+        // Compute gradients using backpropagation
+        const gradW = []
+        const gradB = []
+
         // Output layer delta (linear activation)
         let delta = err.map(e => [e]);
+
         for (let l = this.layers - 2; l >= 0; l--) {
-            // Compute gradients
+            // Compute gradients for this layer
             const dW = [];
             const db = [];
             for (let i = 0; i < this.architecture[l + 1]; i++) {
@@ -87,13 +139,10 @@ class MultiLayerNetwork {
                     dW[i][j] = delta[i][0] * this.activations[l][j][0];
                 }
             }
-            // Update weights and biases
-            for (let i = 0; i < this.architecture[l + 1]; i++) {
-                this.biases[l][i][0] -= lr * db[i][0];
-                for (let j = 0; j < this.architecture[l]; j++) {
-                    this.weights[l][i][j] -= lr * dW[i][j];
-                }
-            }
+
+            gradW.unshift(dW)
+            gradB.unshift(db)
+
             // Compute delta for previous layer (if not input)
             if (l > 0) {
                 const newDelta = [];
@@ -109,7 +158,93 @@ class MultiLayerNetwork {
                 delta = newDelta;
             }
         }
+
+        // Apply gradient clipping
+        this.clipGradients(gradW, gradB)
+
+        // Apply Adam optimizer update
+        this.adamUpdate(gradW, gradB, lr)
+
         return loss;
+    }
+
+    clipGradients(gradW, gradB) {
+        // Global norm clipping
+        let totalNorm = 0
+
+        // Calculate total norm
+        for (let l = 0; l < gradW.length; l++) {
+            for (let i = 0; i < gradW[l].length; i++) {
+                for (let j = 0; j < gradW[l][i].length; j++) {
+                    totalNorm += gradW[l][i][j] * gradW[l][i][j]
+                }
+            }
+            for (let i = 0; i < gradB[l].length; i++) {
+                totalNorm += gradB[l][i][0] * gradB[l][i][0]
+            }
+        }
+        totalNorm = Math.sqrt(totalNorm)
+
+        // Clip if necessary
+        if (totalNorm > this.gradClipThreshold) {
+            const clipCoef = this.gradClipThreshold / (totalNorm + 1e-6)
+            for (let l = 0; l < gradW.length; l++) {
+                for (let i = 0; i < gradW[l].length; i++) {
+                    for (let j = 0; j < gradW[l][i].length; j++) {
+                        gradW[l][i][j] *= clipCoef
+                    }
+                }
+                for (let i = 0; i < gradB[l].length; i++) {
+                    gradB[l][i][0] *= clipCoef
+                }
+            }
+        }
+    }
+
+    adamUpdate(gradW, gradB, lr) {
+        // Increment time step
+        this.adamT++
+
+        // Bias correction coefficients
+        const biasCorr1 = 1 - Math.pow(this.beta1, this.adamT)
+        const biasCorr2 = 1 - Math.pow(this.beta2, this.adamT)
+
+        // Update parameters layer by layer
+        for (let l = 0; l < this.layers - 1; l++) {
+            // Update weights
+            for (let i = 0; i < this.architecture[l + 1]; i++) {
+                for (let j = 0; j < this.architecture[l]; j++) {
+                    const g = gradW[l][i][j]
+
+                    // Update moments
+                    this.adamM_w[l][i][j] = this.beta1 * this.adamM_w[l][i][j] + (1 - this.beta1) * g
+                    this.adamV_w[l][i][j] = this.beta2 * this.adamV_w[l][i][j] + (1 - this.beta2) * g * g
+
+                    // Bias-corrected moments
+                    const mHat = this.adamM_w[l][i][j] / biasCorr1
+                    const vHat = this.adamV_w[l][i][j] / biasCorr2
+
+                    // Update weight
+                    this.weights[l][i][j] -= lr * mHat / (Math.sqrt(vHat) + this.epsilon)
+                }
+            }
+
+            // Update biases
+            for (let i = 0; i < this.architecture[l + 1]; i++) {
+                const g = gradB[l][i][0]
+
+                // Update moments
+                this.adamM_b[l][i][0] = this.beta1 * this.adamM_b[l][i][0] + (1 - this.beta1) * g
+                this.adamV_b[l][i][0] = this.beta2 * this.adamV_b[l][i][0] + (1 - this.beta2) * g * g
+
+                // Bias-corrected moments
+                const mHat = this.adamM_b[l][i][0] / biasCorr1
+                const vHat = this.adamV_b[l][i][0] / biasCorr2
+
+                // Update bias
+                this.biases[l][i][0] -= lr * mHat / (Math.sqrt(vHat) + this.epsilon)
+            }
+        }
     }
     
     /*
@@ -127,40 +262,68 @@ class MultiLayerNetwork {
     }
 
     saveState() {
-        // Deep copy the current state of the network
+        // Deep copy the current state of the network including optimizer state
         return {
             architecture: [...this.architecture],
-            weights: this.weights.map(layer => 
+            weights: this.weights.map(layer =>
                 layer.map(neuron => [...neuron])
             ),
-            biases: this.biases.map(layer => 
+            biases: this.biases.map(layer =>
                 layer.map(bias => [...bias])
             ),
-            activations: this.activations ? this.activations.map(layer => 
+            activations: this.activations ? this.activations.map(layer =>
                 layer.map(activation => [...activation])
             ) : [],
-            zValues: this.zValues ? this.zValues.map(layer => 
+            zValues: this.zValues ? this.zValues.map(layer =>
                 layer.map(z => [...z])
-            ) : []
+            ) : [],
+            // Save Adam optimizer state
+            adamM_w: this.adamM_w.map(layer => layer.map(row => [...row])),
+            adamV_w: this.adamV_w.map(layer => layer.map(row => [...row])),
+            adamM_b: this.adamM_b.map(layer => layer.map(row => [...row])),
+            adamV_b: this.adamV_b.map(layer => layer.map(row => [...row])),
+            adamT: this.adamT
         };
     }
 
     loadState(state) {
-        // Restore the network to a previous state
+        // Restore the network to a previous state including optimizer state
         this.architecture = [...state.architecture];
         this.layers = this.architecture.length;
-        this.weights = state.weights.map(layer => 
+        this.weights = state.weights.map(layer =>
             layer.map(neuron => [...neuron])
         );
-        this.biases = state.biases.map(layer => 
+        this.biases = state.biases.map(layer =>
             layer.map(bias => [...bias])
         );
-        this.activations = state.activations ? state.activations.map(layer => 
+        this.activations = state.activations ? state.activations.map(layer =>
             layer.map(activation => [...activation])
         ) : [];
-        this.zValues = state.zValues ? state.zValues.map(layer => 
+        this.zValues = state.zValues ? state.zValues.map(layer =>
             layer.map(z => [...z])
         ) : [];
+
+        // Restore Adam optimizer state if available
+        if (state.adamM_w) {
+            this.adamM_w = state.adamM_w.map(layer => layer.map(row => [...row]));
+            this.adamV_w = state.adamV_w.map(layer => layer.map(row => [...row]));
+            this.adamM_b = state.adamM_b.map(layer => layer.map(row => [...row]));
+            this.adamV_b = state.adamV_b.map(layer => layer.map(row => [...row]));
+            this.adamT = state.adamT || 0;
+        } else {
+            // Initialize Adam state if not present in saved state (backward compatibility)
+            this.adamM_w = [];
+            this.adamV_w = [];
+            this.adamM_b = [];
+            this.adamV_b = [];
+            this.adamT = 0;
+            for (let i = 0; i < this.layers - 1; i++) {
+                this.adamM_w.push(this.zeros(this.architecture[i + 1], this.architecture[i]));
+                this.adamV_w.push(this.zeros(this.architecture[i + 1], this.architecture[i]));
+                this.adamM_b.push(this.zeros(this.architecture[i + 1], 1));
+                this.adamV_b.push(this.zeros(this.architecture[i + 1], 1));
+            }
+        }
     }
 }
 
