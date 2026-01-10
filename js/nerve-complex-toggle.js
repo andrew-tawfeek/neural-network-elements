@@ -14,6 +14,7 @@ const NerveComplexToggle = {
         const dualLegend = document.getElementById('dual-graph-legend');
         const nerveLegend = document.getElementById('nerve-complex-legend');
         const exportDiv = document.getElementById('dual-graph-export');
+        const bettiSection = document.getElementById('betti-numbers-section');
 
         this.isNerveView = !this.isNerveView;
 
@@ -26,6 +27,7 @@ const NerveComplexToggle = {
             dualLegend.style.display = 'none';
             nerveLegend.style.display = 'block';
             exportDiv.style.display = 'none';
+            if (bettiSection) bettiSection.style.display = 'block';
 
             // Render the nerve complex
             this.renderNerveComplex();
@@ -38,6 +40,7 @@ const NerveComplexToggle = {
             dualLegend.style.display = 'block';
             nerveLegend.style.display = 'none';
             exportDiv.style.display = 'flex';
+            if (bettiSection) bettiSection.style.display = 'none';
         }
     },
 

@@ -198,6 +198,14 @@
                                         </select>
                                         <button onclick="exportDualGraph()" style="font-size: 12px; padding: 4px 8px;">Export Dual Graph</button>
                                     </div>
+                                    <div id="betti-numbers-section" style="display: none; margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 4px; border: 1px solid #e0e0e0;">
+                                        <button id="compute-betti-btn" onclick="computeBettiNumbers()" style="font-size: 12px; padding: 6px 12px; margin-bottom: 8px; background-color: #3498db; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: 500; transition: background-color 0.2s ease;" onmouseover="this.style.backgroundColor='#2980b9'" onmouseout="this.style.backgroundColor='#3498db'">
+                                            Compute Betti Numbers
+                                        </button>
+                                        <div id="betti-numbers-display" style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 12px; color: #333; min-height: 20px;">
+                                            <!-- Results will appear here -->
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -226,6 +234,7 @@
     <script src="js/dual-graph.js"></script>
     <script src="js/binary-display.js"></script>
     <script src="js/nerve-complex-toggle.js"></script>
+    <script src="js/betti-numbers.js"></script>
     <script src="js/visualization-3d.js"></script>
     <script src="js/training.js"></script>
     <script src="js/file-manager.js"></script>
