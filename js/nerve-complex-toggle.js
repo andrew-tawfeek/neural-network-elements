@@ -291,6 +291,12 @@ const NerveComplexToggle = {
         // Clear container and add SVG
         container.innerHTML = '';
         container.appendChild(svg);
+
+        // Update Betti numbers if they are being shown
+        if (typeof BettiNumbers !== 'undefined' && nerveData.success) {
+            const poset = { simplices, edges };
+            BettiNumbers.updateIfNeeded(poset);
+        }
     },
 
     /**

@@ -7,6 +7,10 @@ const BettiNumbers = {
     lastResult: null,
     isComputing: false,
 
+    // Toggle state
+    showBettiNumbers: false,
+    lastPosetState: null,  // Track the last poset to detect changes
+
     /**
      * Main function to compute Betti numbers
      * Called when the "Compute Betti Numbers" button is clicked
@@ -380,10 +384,138 @@ const BettiNumbers = {
     clearCache() {
         this.lastPoset = null;
         this.lastResult = null;
+    },
+
+    /**
+     * Check if the poset has changed since last computation
+     * @param {Object} newPoset - Object with simplices and edges arrays
+     * @returns {boolean} True if poset has changed
+     */
+    hasPosetChanged(newPoset) {
+        if (!this.lastPosetState || !newPoset) return true;
+
+        // Compare the poset structure
+        const oldSimplices = this.lastPosetState.simplices;
+        const newSimplices = newPoset.simplices;
+
+        // Check if number of simplices changed
+        if (oldSimplices.length !== newSimplices.length) return true;
+
+        // Check if edges changed
+        const oldEdges = JSON.stringify(this.lastPosetState.edges.sort());
+        const newEdges = JSON.stringify(newPoset.edges.sort());
+        if (oldEdges !== newEdges) return true;
+
+        // Check if simplices themselves changed
+        const oldSimplexSet = new Set(oldSimplices.map(s =>
+            JSON.stringify([...s].sort())
+        ));
+        const newSimplexSet = new Set(newSimplices.map(s =>
+            JSON.stringify([...s].sort())
+        ));
+
+        if (oldSimplexSet.size !== newSimplexSet.size) return true;
+
+        for (const simplex of newSimplexSet) {
+            if (!oldSimplexSet.has(simplex)) return true;
+        }
+
+        return false;
+    },
+
+    /**
+     * Update Betti numbers if needed (when toggle is on and poset has changed)
+     * Called automatically by nerve complex rendering
+     * @param {Object} poset - Object with simplices and edges arrays
+     */
+    updateIfNeeded(poset) {
+        if (!this.showBettiNumbers) return;
+        if (!poset || !poset.simplices) return;
+
+        // Check if poset has changed
+        if (this.hasPosetChanged(poset)) {
+            this.computeAndDisplay(poset);
+            // Deep copy the poset state for future comparison
+            this.lastPosetState = {
+                simplices: JSON.parse(JSON.stringify(poset.simplices)),
+                edges: JSON.parse(JSON.stringify(poset.edges))
+            };
+        }
+    },
+
+    /**
+     * Compute and display Betti numbers
+     * @param {Object} posetParam - Optional poset object to use instead of computing
+     */
+    computeAndDisplay(posetParam = null) {
+        const display = document.getElementById('betti-numbers-display');
+        if (!display) return;
+
+        // Show loading state
+        display.innerHTML = '<div style="color: #666; font-style: italic;">Computing...</div>';
+
+        // Use setTimeout to allow UI to update
+        setTimeout(() => {
+            try {
+                // Get poset from parameter or from BinaryDisplay
+                let poset = posetParam;
+                if (!poset && typeof BinaryDisplay !== 'undefined') {
+                    const result = BinaryDisplay.computeUniversalNerveComplex();
+                    if (!result.success) {
+                        display.innerHTML = `<div style="color: #e74c3c;">${result.error || result.message}</div>`;
+                        return;
+                    }
+                    poset = { simplices: result.simplices, edges: result.edges };
+                }
+
+                if (!poset || !poset.simplices) {
+                    display.innerHTML = '<div style="color: #e74c3c;">No poset data available</div>';
+                    return;
+                }
+
+                // Build the order complex from the poset
+                const orderComplex = this.buildOrderComplex(poset);
+
+                // Compute homology using chain complexes
+                const bettiNumbers = this.computeHomology(orderComplex);
+
+                // Cache the result
+                this.lastPoset = poset;
+                this.lastResult = {
+                    bettiNumbers,
+                    orderComplex,
+                    posetSize: poset.simplices.length,
+                    numEdges: poset.edges.length
+                };
+
+                // Display results
+                this.displayResults(this.lastResult);
+            } catch (error) {
+                console.error('Error computing Betti numbers:', error);
+                display.innerHTML = `<div style="color: #e74c3c;">Error: ${error.message}</div>`;
+            }
+        }, 10);
     }
 };
 
-// Global function for button onclick handler
+// Global function for toggle handler
+function toggleBettiNumbers() {
+    const checkbox = document.getElementById('betti-numbers-toggle');
+    BettiNumbers.showBettiNumbers = checkbox.checked;
+
+    if (checkbox.checked) {
+        // Compute and display Betti numbers
+        BettiNumbers.computeAndDisplay();
+    } else {
+        // Hide Betti numbers display
+        const display = document.getElementById('betti-numbers-display');
+        if (display) {
+            display.innerHTML = '';
+        }
+    }
+}
+
+// Legacy global function for backward compatibility
 function computeBettiNumbers() {
     BettiNumbers.compute();
 }
