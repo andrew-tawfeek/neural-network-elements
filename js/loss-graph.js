@@ -5,8 +5,22 @@ const LossGraph = {
     lossHistory: [],
     networkStates: [], // Store network states for each step
     currentStep: -1, // Track which step we're viewing
-    maxDataPoints: 1000, // Maximum number of points to display
+    maxDataPoints: 10000, // Maximum number of points to display (increased for long training)
     isInitialized: false,
+
+    // Drag state for jumping to epochs
+    isDragging: false,
+    dragStartX: 0,
+    lastDragStep: -1,
+
+    // Adaptive state saving
+    totalStepsSaved: 0, // Total number of steps processed
+    currentSaveInterval: 1, // Current interval for saving states (adaptive)
+    lastSavedStep: -1, // Last step where we saved a state
+
+    // Auto-scaling for Y-axis
+    autoScale: true, // Enable auto-scaling
+    visibleWindowSize: 500, // Number of recent points to consider for scaling
 
     init() {
         this.canvas = document.getElementById('loss-graph-canvas');
@@ -22,12 +36,18 @@ const LossGraph = {
     },
 
     setupEventListeners() {
-        // Add click event listener for jumping to training steps
-        this.canvas.addEventListener('click', (e) => this.handleClick(e));
-        
-        // Add hover cursor styling
-        this.canvas.addEventListener('mousemove', (e) => this.handleHover(e));
-        
+        // Mouse down - start drag (only when training is paused)
+        this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+
+        // Mouse move - handle dragging and hover
+        this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+
+        // Mouse up - end drag
+        this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
+
+        // Mouse leave - cancel drag
+        this.canvas.addEventListener('mouseleave', (e) => this.handleMouseLeave(e));
+
         // Listen for window resize to redraw graph
         window.addEventListener('resize', () => {
             if (this.isInitialized) {
@@ -38,51 +58,94 @@ const LossGraph = {
 
     addLossValue(loss, step) {
         if (!this.isInitialized) return;
-        
-        // Save current network state
-        if (window.net && typeof window.net.saveState === 'function') {
-            this.networkStates.push(window.net.saveState());
+
+        // Increment total steps
+        this.totalStepsSaved++;
+
+        // Determine adaptive save interval based on total steps
+        this.updateSaveInterval();
+
+        // Decide whether to save network state for this step
+        const shouldSaveState = (this.totalStepsSaved - this.lastSavedStep) >= this.currentSaveInterval;
+
+        if (shouldSaveState) {
+            // Save current network state
+            if (window.net && typeof window.net.saveState === 'function') {
+                this.networkStates.push(window.net.saveState());
+                this.lastSavedStep = this.totalStepsSaved;
+            } else {
+                // Fallback: save a placeholder
+                this.networkStates.push(null);
+                this.lastSavedStep = this.totalStepsSaved;
+            }
         } else {
-            // Fallback: save a placeholder
+            // Don't save state for this step (use null placeholder)
             this.networkStates.push(null);
         }
-        
-        this.lossHistory.push({ loss, step });
+
+        this.lossHistory.push({ loss, step, hasState: shouldSaveState });
         this.currentStep = this.lossHistory.length - 1; // Update current step to latest
-        
+
         // Keep only the most recent maxDataPoints
         if (this.lossHistory.length > this.maxDataPoints) {
             this.lossHistory.shift();
             this.networkStates.shift();
             this.currentStep = Math.max(0, this.currentStep - 1);
         }
-        
+
         this.draw();
         this.updateStatsDisplay();
+    },
+
+    updateSaveInterval() {
+        // Adaptive state saving to reduce memory usage
+        // Steps 1-100: Save every step
+        // Steps 101-1000: Save every 10 steps
+        // Steps 1001-10000: Save every 100 steps
+        // Steps 10001+: Save every 1000 steps
+
+        if (this.totalStepsSaved <= 100) {
+            this.currentSaveInterval = 1;
+        } else if (this.totalStepsSaved <= 1000) {
+            this.currentSaveInterval = 10;
+        } else if (this.totalStepsSaved <= 10000) {
+            this.currentSaveInterval = 100;
+        } else {
+            this.currentSaveInterval = 1000;
+        }
     },
 
     updateStatsDisplay() {
         const statsElement = document.getElementById('loss-stats');
         if (!statsElement) return;
-        
+
         const stats = this.getStats();
         if (this.lossHistory.length === 0) {
             statsElement.innerHTML = '';
             return;
         }
-        
+
         const currentLoss = this.lossHistory[this.lossHistory.length - 1].loss;
         const currentStepDisplay = this.currentStep >= 0 ? this.currentStep + 1 : this.lossHistory.length;
-        const viewingText = this.currentStep >= 0 && this.currentStep !== this.lossHistory.length - 1 
-            ? `<span style="color: #e74c3c;">Viewing: Step ${currentStepDisplay}</span>` 
+        const viewingText = this.currentStep >= 0 && this.currentStep !== this.lossHistory.length - 1
+            ? `<span style="color: #e74c3c;">Viewing: Step ${currentStepDisplay}</span>`
             : 'Viewing: Latest';
-        
+
+        // Count saved states
+        const savedStates = this.networkStates.filter(s => s !== null).length;
+        const saveRatio = ((savedStates / this.lossHistory.length) * 100).toFixed(0);
+
+        // Show adaptive saving info if interval > 1
+        const adaptiveInfo = this.currentSaveInterval > 1
+            ? `<br><span style="font-size: 10px; color: #95a5a6;">Saving every ${this.currentSaveInterval} steps (${savedStates}/${this.lossHistory.length} saved)</span>`
+            : '';
+
         statsElement.innerHTML = `
             <div style="font-size: 11px; color: #666;">
-                Current: ${currentLoss.toFixed(6)} | 
-                Best: ${stats.min.toFixed(6)} | 
-                Steps: ${this.lossHistory.length} | 
-                ${viewingText}
+                Current: ${currentLoss.toFixed(6)} |
+                Best: ${stats.min.toFixed(6)} |
+                Steps: ${this.lossHistory.length} |
+                ${viewingText}${adaptiveInfo}
             </div>
         `;
     },
@@ -91,6 +154,9 @@ const LossGraph = {
         this.lossHistory = [];
         this.networkStates = [];
         this.currentStep = -1;
+        this.totalStepsSaved = 0;
+        this.currentSaveInterval = 1;
+        this.lastSavedStep = -1;
         this.updateStatsDisplay();
         if (this.isInitialized) {
             this.draw();
@@ -119,8 +185,19 @@ const LossGraph = {
         // Find data ranges
         const minStep = Math.min(...this.lossHistory.map(d => d.step));
         const maxStep = Math.max(...this.lossHistory.map(d => d.step));
-        const minLoss = Math.min(...this.lossHistory.map(d => d.loss));
-        const maxLoss = Math.max(...this.lossHistory.map(d => d.loss));
+
+        // Auto-scaling: Use only recent data for Y-axis range during long training
+        let minLoss, maxLoss;
+        if (this.autoScale && this.lossHistory.length > this.visibleWindowSize) {
+            // Use only the most recent visibleWindowSize points for scaling
+            const recentData = this.lossHistory.slice(-this.visibleWindowSize);
+            minLoss = Math.min(...recentData.map(d => d.loss));
+            maxLoss = Math.max(...recentData.map(d => d.loss));
+        } else {
+            // Use all data for scaling
+            minLoss = Math.min(...this.lossHistory.map(d => d.loss));
+            maxLoss = Math.max(...this.lossHistory.map(d => d.loss));
+        }
 
         // Add some padding to loss range
         const lossRange = maxLoss - minLoss;
@@ -152,17 +229,20 @@ const LossGraph = {
     drawEmptyState() {
         const width = this.canvas.width;
         const height = this.canvas.height;
-        
+
         this.ctx.fillStyle = '#f8f9fa';
         this.ctx.fillRect(0, 0, width, height);
-        
+
         this.ctx.fillStyle = '#999';
         this.ctx.font = '16px Arial';
         this.ctx.textAlign = 'center';
         this.ctx.fillText('No training data yet', width / 2, height / 2 - 10);
         this.ctx.font = '12px Arial';
         this.ctx.fillText('Start training to see loss curve', width / 2, height / 2 + 15);
-        this.ctx.fillText('Click points on the curve to jump to training steps', width / 2, height / 2 + 35);
+        this.ctx.fillText('Drag on the curve to jump to any training epoch (when paused)', width / 2, height / 2 + 35);
+        this.ctx.font = '11px Arial';
+        this.ctx.fillStyle = '#aaa';
+        this.ctx.fillText('Auto-scales Y-axis for long training sessions', width / 2, height / 2 + 55);
     },
 
     drawGrid(margin, plotWidth, plotHeight, minStep, maxStep, minLoss, maxLoss, scaleX, scaleY) {
@@ -240,13 +320,25 @@ const LossGraph = {
 
         this.ctx.stroke();
 
-        // Draw clickable points
-        this.ctx.fillStyle = '#3498db';
+        // Draw clickable points with different styles for saved/unsaved states
         for (let i = 0; i < this.lossHistory.length; i++) {
             const point = this.lossHistory[i];
-            this.ctx.beginPath();
-            this.ctx.arc(scaleX(point.step), scaleY(point.loss), 3, 0, 2 * Math.PI);
-            this.ctx.fill();
+            const hasSavedState = this.networkStates[i] !== null;
+
+            // Use different colors: solid for saved states, hollow for unsaved
+            if (hasSavedState) {
+                this.ctx.fillStyle = '#3498db';
+                this.ctx.beginPath();
+                this.ctx.arc(scaleX(point.step), scaleY(point.loss), 3, 0, 2 * Math.PI);
+                this.ctx.fill();
+            } else {
+                // Draw hollow circle for unsaved states
+                this.ctx.strokeStyle = '#3498db';
+                this.ctx.lineWidth = 1;
+                this.ctx.beginPath();
+                this.ctx.arc(scaleX(point.step), scaleY(point.loss), 2, 0, 2 * Math.PI);
+                this.ctx.stroke();
+            }
         }
 
         // Highlight current step if set
@@ -320,61 +412,183 @@ const LossGraph = {
             this.ctx.fillText(step.toString(), x, height - margin.bottom + 15);
         }
         
-        // Add instruction text
+        // Add instruction text (changes based on training state)
         this.ctx.font = '11px Arial';
         this.ctx.textAlign = 'right';
-        this.ctx.fillStyle = '#666';
-        this.ctx.fillText('Click any point to jump to that training step', width - 10, 35);
-    },
+        if (this.isTrainingActive()) {
+            this.ctx.fillStyle = '#e74c3c';
+            this.ctx.fillText('⏸ Pause training to navigate the loss graph', width - 10, 35);
+        } else {
+            this.ctx.fillStyle = '#666';
+            this.ctx.fillText('Drag to jump to any training epoch', width - 10, 35);
+        }
 
-    handleClick(event) {
-        if (this.lossHistory.length === 0) return;
-        
-        const rect = this.canvas.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
-        
-        // Convert click position to step number
-        const margin = { left: 60, right: 30, top: 20, bottom: 50 };
-        const plotWidth = this.canvas.width - margin.left - margin.right;
-        const relativeX = (x - margin.left) / plotWidth;
-        
-        if (relativeX < 0 || relativeX > 1) return;
-        
-        const targetStep = Math.round(relativeX * (this.lossHistory.length - 1));
-        
-        if (targetStep >= 0 && targetStep < this.networkStates.length) {
-            this.jumpToStep(targetStep);
+        // Add legend for saved states if using adaptive saving
+        if (this.currentSaveInterval > 1) {
+            this.ctx.font = '10px Arial';
+            this.ctx.textAlign = 'left';
+            this.ctx.fillStyle = '#666';
+
+            // Solid circle
+            this.ctx.fillStyle = '#3498db';
+            this.ctx.beginPath();
+            this.ctx.arc(margin.left + 10, 50, 3, 0, 2 * Math.PI);
+            this.ctx.fill();
+            this.ctx.fillStyle = '#666';
+            this.ctx.fillText('Saved state', margin.left + 20, 53);
+
+            // Hollow circle
+            this.ctx.strokeStyle = '#3498db';
+            this.ctx.lineWidth = 1;
+            this.ctx.beginPath();
+            this.ctx.arc(margin.left + 110, 50, 2, 0, 2 * Math.PI);
+            this.ctx.stroke();
+            this.ctx.fillStyle = '#666';
+            this.ctx.fillText('Interpolated', margin.left + 120, 53);
         }
     },
 
-    handleHover(event) {
+    isTrainingActive() {
+        // Check if continuous training is active
+        return typeof TrainingManager !== 'undefined' && TrainingManager.isContinuousTraining;
+    },
+
+    handleMouseDown(event) {
+        // Block interaction if training is active
+        if (this.isTrainingActive()) return;
+        if (this.lossHistory.length === 0) return;
+
+        const rect = this.canvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+
+        const margin = { left: 60, right: 30, top: 20, bottom: 50 };
+        const plotWidth = this.canvas.width - margin.left - margin.right;
+        const relativeX = (x - margin.left) / plotWidth;
+
+        if (relativeX >= 0 && relativeX <= 1) {
+            this.isDragging = true;
+            this.dragStartX = x;
+            this.canvas.style.cursor = 'grabbing';
+
+            // Jump to initial position
+            const targetStep = Math.round(relativeX * (this.lossHistory.length - 1));
+            this.jumpToStepDuringDrag(targetStep);
+        }
+    },
+
+    handleMouseMove(event) {
+        // Block interaction if training is active
+        if (this.isTrainingActive()) {
+            this.canvas.style.cursor = 'not-allowed';
+            return;
+        }
+
         if (this.lossHistory.length === 0) {
             this.canvas.style.cursor = 'default';
             return;
         }
-        
+
         const rect = this.canvas.getBoundingClientRect();
         const x = event.clientX - rect.left;
+
         const margin = { left: 60, right: 30, top: 20, bottom: 50 };
         const plotWidth = this.canvas.width - margin.left - margin.right;
         const relativeX = (x - margin.left) / plotWidth;
-        
-        if (relativeX >= 0 && relativeX <= 1) {
-            this.canvas.style.cursor = 'pointer';
+
+        if (this.isDragging) {
+            // Update position during drag
+            if (relativeX >= 0 && relativeX <= 1) {
+                const targetStep = Math.round(relativeX * (this.lossHistory.length - 1));
+                if (targetStep !== this.lastDragStep) {
+                    this.jumpToStepDuringDrag(targetStep);
+                }
+            }
         } else {
+            // Update cursor on hover
+            if (relativeX >= 0 && relativeX <= 1) {
+                this.canvas.style.cursor = 'grab';
+            } else {
+                this.canvas.style.cursor = 'default';
+            }
+        }
+    },
+
+    handleMouseUp(event) {
+        if (this.isDragging) {
+            this.isDragging = false;
+            this.lastDragStep = -1;
+            this.canvas.style.cursor = 'grab';
+
+            // Show final step info
+            if (this.currentStep >= 0) {
+                this.showStepInfo(this.currentStep);
+            }
+        }
+    },
+
+    handleMouseLeave(event) {
+        if (this.isDragging) {
+            this.isDragging = false;
+            this.lastDragStep = -1;
             this.canvas.style.cursor = 'default';
         }
     },
 
+    jumpToStepDuringDrag(step) {
+        if (step < 0 || step >= this.networkStates.length) return;
+        if (step === this.lastDragStep) return;
+
+        this.lastDragStep = step;
+        this.currentStep = step;
+
+        // Find nearest saved state (may not be at exact step due to adaptive saving)
+        const savedStep = this.findNearestSavedState(step);
+
+        // Restore network state
+        if (window.net && savedStep >= 0 && this.networkStates[savedStep]) {
+            window.net.loadState(this.networkStates[savedStep]);
+
+            // Redraw loss graph with current step highlighted
+            this.draw();
+            this.updateStatsDisplay();
+
+            // Update visualizations less frequently during drag
+            if (typeof NetworkVisualization !== 'undefined' && NetworkVisualization.draw) {
+                NetworkVisualization.draw(false);
+            }
+            if (typeof BinaryDisplay !== 'undefined' && BinaryDisplay.update) {
+                BinaryDisplay.update();
+            }
+        }
+    },
+
+    findNearestSavedState(targetStep) {
+        // Search backwards from target to find nearest saved state
+        for (let i = targetStep; i >= 0; i--) {
+            if (this.networkStates[i] !== null) {
+                return i;
+            }
+        }
+        // If no saved state found before, search forward
+        for (let i = targetStep + 1; i < this.networkStates.length; i++) {
+            if (this.networkStates[i] !== null) {
+                return i;
+            }
+        }
+        return -1; // No saved state found
+    },
+
     jumpToStep(step) {
         if (step < 0 || step >= this.networkStates.length) return;
-        
+
+        // Find nearest saved state (may not be at exact step due to adaptive saving)
+        const savedStep = this.findNearestSavedState(step);
+
         // Restore network state
-        if (window.net && this.networkStates[step]) {
-            window.net.loadState(this.networkStates[step]);
-            this.currentStep = step;
-            
+        if (window.net && savedStep >= 0 && this.networkStates[savedStep]) {
+            window.net.loadState(this.networkStates[savedStep]);
+            this.currentStep = step; // Display step is what user clicked, but state is from nearest saved
+
             // Update all visualizations
             if (typeof createWeights === 'function') {
                 createWeights();
@@ -394,16 +608,16 @@ const LossGraph = {
             if (typeof BinaryDisplay !== 'undefined' && BinaryDisplay.update) {
                 BinaryDisplay.update();
             }
-            
+
             // Redraw loss graph with current step highlighted
             this.draw();
-            
+
             // Show notification
-            this.showStepInfo(step);
+            this.showStepInfo(step, savedStep !== step);
         }
     },
 
-    showStepInfo(step) {
+    showStepInfo(step, isApproximate = false) {
         const loss = this.lossHistory[step];
         const info = document.createElement('div');
         info.style.cssText = `
@@ -418,10 +632,15 @@ const LossGraph = {
             z-index: 1000;
             box-shadow: 0 2px 10px rgba(0,0,0,0.3);
         `;
-        info.innerHTML = `Jumped to Step ${step + 1}<br>Loss: ${loss.loss.toFixed(6)}`;
-        
+
+        let infoText = `Jumped to Step ${step + 1}<br>Loss: ${loss.loss.toFixed(6)}`;
+        if (isApproximate) {
+            infoText += `<br><span style="font-size: 10px; color: #f39c12;">※ Using nearest saved state</span>`;
+        }
+        info.innerHTML = infoText;
+
         document.body.appendChild(info);
-        
+
         // Fade out after 2 seconds
         setTimeout(() => {
             info.style.transition = 'opacity 0.5s';

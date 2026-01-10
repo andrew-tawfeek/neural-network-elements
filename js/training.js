@@ -161,6 +161,11 @@ const TrainingManager = {
         // Update play/pause buttons
         this.updatePlayPauseButtons();
 
+        // Redraw loss graph to update instruction text
+        if (typeof LossGraph !== 'undefined' && LossGraph.draw) {
+            LossGraph.draw();
+        }
+
         console.log(`Continuous training started (interval: ${this.trainingInterval}ms, optimized: ${skipVisualization})`);
     },
 
@@ -186,6 +191,11 @@ const TrainingManager = {
 
         // Update play/pause buttons
         this.updatePlayPauseButtons();
+
+        // Redraw loss graph to update instruction text and enable interaction
+        if (typeof LossGraph !== 'undefined' && LossGraph.draw) {
+            LossGraph.draw();
+        }
 
         console.log('Continuous training stopped');
     },
