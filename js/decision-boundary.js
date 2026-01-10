@@ -7,7 +7,8 @@ const DecisionBoundary = {
     highlightedNeuron: null, // Track which neuron is being highlighted (legacy - will be replaced)
     highlightedNeurons: new Set(), // Track multiple highlighted neurons
     originalRegions: null, // Store original region data for restoration
-    
+    visualizeTrainingData: false, // Whether to show training points
+
     // Panning state
     panOffset: { x: 0, y: 0 }, // Current pan offset
     viewBounds: { xMin: -3, xMax: 3, yMin: -3, yMax: 3 }, // Current view bounds
@@ -286,6 +287,11 @@ const DecisionBoundary = {
             NerveComplexToggle.updateIfActive();
         }
 
+        // Render training data points if visualization is enabled
+        if (this.visualizeTrainingData && window.data && window.data.length > 0) {
+            this.renderTrainingPoints();
+        }
+
         // Draw current point if it exists
         if (this.currentPoint) {
             const px = ((this.currentPoint.x - xMin) / (xMax - xMin)) * 300;
@@ -538,9 +544,109 @@ const DecisionBoundary = {
         // Note: We don't call update() here to avoid redundant redraws
         // The calling code should call update() after making all changes
     },
+
+    /**
+     * Render training data points on the plot
+     * Shows training points with color coding based on their target values
+     */
+    renderTrainingPoints() {
+        if (!window.data || window.data.length === 0) return;
+
+        const ctx = this.plotCtx;
+        const viewWidth = this.viewBounds.xMax - this.viewBounds.xMin;
+        const viewHeight = this.viewBounds.yMax - this.viewBounds.yMin;
+
+        window.data.forEach(point => {
+            // Only render if point has 2D input
+            if (!point.inputs || point.inputs.length !== 2) return;
+
+            const [x, y] = point.inputs;
+
+            // Convert to canvas coordinates
+            const canvasX = ((x - this.viewBounds.xMin) / viewWidth) * 300;
+            const canvasY = (1 - (y - this.viewBounds.yMin) / viewHeight) * 300;
+
+            // Skip if outside viewport
+            if (canvasX < 0 || canvasX > 300 || canvasY < 0 || canvasY > 300) return;
+
+            // Determine color based on output
+            let color;
+            const output = point.targets ? point.targets[0] : point.output;
+
+            if (this.isBinaryClassification(output)) {
+                // Binary classification: blue for class 0, red for class 1
+                color = output < 0.5 ? '#3498db' : '#e74c3c';
+            } else {
+                // Regression: gradient from blue (low) to red (high)
+                color = this.getGradientColor(output);
+            }
+
+            // Draw point
+            ctx.beginPath();
+            ctx.arc(canvasX, canvasY, 4, 0, 2 * Math.PI);
+            ctx.fillStyle = color;
+            ctx.fill();
+
+            // Add white border for visibility
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+        });
+    },
+
+    /**
+     * Check if the current dataset represents binary classification
+     * Returns true if all outputs are close to 0 or 1
+     */
+    isBinaryClassification(output) {
+        // Check if output is close to 0 or 1 (binary classification)
+        // Look at all data points to determine if it's binary
+        if (!window.data || window.data.length === 0) return true;
+
+        const allOutputs = window.data.map(d => d.targets ? d.targets[0] : d.output);
+        const uniqueOutputs = [...new Set(allOutputs.map(o => Math.round(o * 10) / 10))];
+
+        // If we only have values near 0 and 1, it's binary classification
+        return uniqueOutputs.length <= 2 &&
+               uniqueOutputs.every(o => Math.abs(o) < 0.1 || Math.abs(o - 1) < 0.1);
+    },
+
+    /**
+     * Get a gradient color based on a value
+     * Maps values to a color gradient from blue (low) to red (high)
+     */
+    getGradientColor(value) {
+        // Map value to color gradient (blue -> purple -> red)
+        // Assumes value is roughly in range [0, 1] or [-1, 1]
+
+        // Normalize to [0, 1]
+        let normalized = value;
+        if (value < 0) {
+            normalized = (value + 1) / 2; // Map [-1, 1] to [0, 1]
+        }
+
+        // Clamp to [0, 1]
+        normalized = Math.max(0, Math.min(1, normalized));
+
+        // Blue (0) -> Purple (0.5) -> Red (1)
+        const r = Math.round(normalized * 255);
+        const b = Math.round((1 - normalized) * 255);
+        const g = Math.round(Math.abs(0.5 - normalized) * 255);
+
+        return `rgb(${r}, ${g}, ${b})`;
+    },
 };
 
 // Global function for backward compatibility
 function updatePlot() {
     DecisionBoundary.update();
+}
+
+// Global function to toggle training data visualization
+function toggleTrainingDataVisualization() {
+    const checkbox = document.getElementById('visualize-training-data');
+    if (DecisionBoundary) {
+        DecisionBoundary.visualizeTrainingData = checkbox.checked;
+        DecisionBoundary.update();
+    }
 }

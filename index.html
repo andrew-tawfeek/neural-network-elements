@@ -83,6 +83,34 @@
                     <div class="info" data-tip="Time between training steps when holding button (milliseconds)">i</div>
                     <input type="number" id="training-interval" value="1000" step="100" min="100" max="5000" onchange="updateTrainingInterval(this.value)">
                 </div>
+                <div class="row">
+                    <label>Visualize Training Data:</label>
+                    <div class="info" data-tip="Show training points on the decision boundary plot">i</div>
+                    <label class="switch">
+                        <input type="checkbox" id="visualize-training-data" onchange="toggleTrainingDataVisualization()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div style="border-top: 1px solid #e0e0e0; margin: 10px 0; padding-top: 10px;">
+                    <div class="row">
+                        <label>Classification Dataset:</label>
+                        <div class="info" data-tip="Generate classic binary classification patterns">i</div>
+                        <select id="classification-dataset" style="width: 200px;">
+                            <option value="annuli">Annuli (Concentric Circles)</option>
+                            <option value="clusters">Two Clusters</option>
+                            <option value="xor">XOR Pattern</option>
+                            <option value="spiral">Spiral</option>
+                            <option value="checkerboard">Checkerboard</option>
+                            <option value="halfplane">Half Plane</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <label>Number of Points:</label>
+                        <div class="info" data-tip="Points per class (total will be 2x this)">i</div>
+                        <input type="number" id="classification-points" value="50" min="10" max="500">
+                    </div>
+                    <button onclick="generateClassificationData()">Generate Classification Data</button>
+                </div>
                 <div style="border-top: 1px solid #e0e0e0; margin: 10px 0; padding-top: 10px;">
                     <div class="row">
                         <label>Target Function:</label>
@@ -236,6 +264,7 @@
     <script src="js/nerve-complex-toggle.js"></script>
     <script src="js/betti-numbers.js"></script>
     <script src="js/visualization-3d.js"></script>
+    <script src="js/classification-datasets.js"></script>
     <script src="js/training.js"></script>
     <script src="js/file-manager.js"></script>
     <script src="js/plot-manager.js"></script>

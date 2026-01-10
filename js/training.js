@@ -33,6 +33,10 @@ const TrainingManager = {
         if (typeof LossGraph !== 'undefined') {
             LossGraph.clearHistory();
         }
+        // Update the plot to clear training points
+        if (typeof updatePlot === 'function') {
+            updatePlot();
+        }
     },
 
     updateDataDisplay() {
@@ -196,11 +200,16 @@ const TrainingManager = {
             
             this.updateDataDisplay();
             if (range === 0) {
-                document.getElementById('error').innerHTML = 
+                document.getElementById('error').innerHTML =
                     `Data generated with constant value: ${minVal.toFixed(2)}`;
             } else {
-                document.getElementById('error').innerHTML = 
+                document.getElementById('error').innerHTML =
                     `Data generated and normalized (original range: ${minVal.toFixed(2)} to ${maxVal.toFixed(2)})`;
+            }
+
+            // Update the plot if plot functionality exists
+            if (typeof updatePlot === 'function') {
+                updatePlot();
             }
         } catch (err) {
             document.getElementById('error').innerHTML = 'Invalid function: ' + err.message;
@@ -337,7 +346,12 @@ const TrainingManager = {
                 if (typeof LossGraph !== 'undefined') {
                     LossGraph.clearHistory();
                 }
-                
+
+                // Update the plot if plot functionality exists
+                if (typeof updatePlot === 'function') {
+                    updatePlot();
+                }
+
                 document.getElementById('error').innerHTML = `Successfully imported ${importedData.length} data points.`;
                 closeModal();
                 

@@ -84,3 +84,10 @@ function updateZoomSlider(zoomLevel) {
         slider.value = Math.round(zoomLevel * 100);
     }
 }
+
+// Training interval control function for UI integration
+function updateTrainingInterval(value) {
+    if (typeof TrainingManager !== 'undefined' && TrainingManager.updateTrainingInterval) {
+        TrainingManager.updateTrainingInterval(value);
+    }
+}
