@@ -1,5 +1,5 @@
 """ipywidgets UI for adjusting weights/biases of a `MultiLayerNetwork` and watching the
-polyhedral decomposition update live.
+exact polyhedral decomposition update live.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ import ipywidgets as widgets
 import matplotlib.pyplot as plt
 import numpy as np
 from IPython.display import display
-from matplotlib.colors import ListedColormap
+from matplotlib.patches import Polygon as MplPolygon
 
 from .decomposition import build_dual_graph, compute_decomposition
 from .network import MultiLayerNetwork
@@ -23,9 +23,21 @@ _PALETTE = [
 ]
 
 
+def _region_color(pattern: tuple[int, ...]) -> str:
+    """Stable color: hash the binary pattern so region colors persist as sliders move (as long
+    as the pattern itself exists)."""
+    if not pattern:
+        return _PALETTE[0]
+    idx = 0
+    for bit in pattern:
+        idx = (idx * 2 + int(bit)) % (1 << 30)
+    return _PALETTE[idx % len(_PALETTE)]
+
+
 class PolyhedraWidget:
     """Build a network with the given architecture, render one slider per weight/bias, and a
-    matplotlib panel showing the polyhedral decomposition that updates on every slider change.
+    matplotlib panel showing the *exact* polyhedral decomposition that updates on every slider
+    change.
 
     The architecture must have input size 2 (the decomposition is a partition of the 2-D input
     plane).
@@ -40,21 +52,21 @@ class PolyhedraWidget:
     def __init__(
         self,
         architecture: Sequence[int] = (2, 4, 1),
-        view_bounds: tuple[float, float, float, float] = (-3.0, 3.0, -3.0, 3.0),
-        resolution: int = 80,
+        view_half: float = 3.0,
         slider_range: tuple[float, float] = (-3.0, 3.0),
         slider_step: float = 0.1,
         seed: int | None = 0,
         show_dual_graph: bool = True,
+        show_neuron_lines: bool = True,
     ):
         if architecture[0] != 2:
             raise ValueError("PolyhedraWidget requires a 2-input network for the 2-D decomposition")
         self.architecture = list(architecture)
-        self.view_bounds = view_bounds
-        self.resolution = resolution
+        self.view_half = view_half
         self.slider_range = slider_range
         self.slider_step = slider_step
         self.show_dual_graph = show_dual_graph
+        self.show_neuron_lines = show_neuron_lines
 
         rng = np.random.default_rng(seed) if seed is not None else None
         self.net = MultiLayerNetwork(self.architecture, rng=rng)
@@ -63,9 +75,6 @@ class PolyhedraWidget:
         self._bias_sliders: list[list[widgets.FloatSlider]] = []
         self._suppress_callbacks = False
 
-        self._fig = None
-        self._ax_decomp = None
-        self._ax_dual = None
         self._plot_output = widgets.Output()
         self._info = widgets.HTML()
 
@@ -80,7 +89,7 @@ class PolyhedraWidget:
         right = widgets.VBox([self._plot_output, self._info])
         self._root = widgets.HBox(
             [widgets.VBox([controls, slider_panel],
-                          layout=widgets.Layout(width="380px", overflow="auto", max_height="700px")),
+                          layout=widgets.Layout(width="380px", overflow="auto", max_height="720px")),
              right]
         )
 
@@ -150,20 +159,45 @@ class PolyhedraWidget:
     def _build_action_buttons(self) -> widgets.Widget:
         randomize_btn = widgets.Button(description="Randomize", icon="random")
         zero_btn = widgets.Button(description="Zero", icon="circle")
-        resolution_slider = widgets.IntSlider(
-            value=self.resolution, min=20, max=200, step=10, description="Resolution",
-            continuous_update=False, style={"description_width": "80px"},
+        view_slider = widgets.FloatSlider(
+            value=self.view_half, min=0.5, max=10.0, step=0.5,
+            description="View ±", continuous_update=False,
+            style={"description_width": "80px"},
             layout=widgets.Layout(width="320px"),
         )
+        lines_toggle = widgets.Checkbox(
+            value=self.show_neuron_lines, description="Draw neuron boundaries",
+            indent=False,
+        )
+        dual_toggle = widgets.Checkbox(
+            value=self.show_dual_graph, description="Show dual graph", indent=False,
+        )
+
         randomize_btn.on_click(lambda _: self.randomize())
         zero_btn.on_click(lambda _: self.zero())
 
-        def _on_res(change):
-            self.resolution = int(change["new"])
+        def _on_view(change):
+            self.view_half = float(change["new"])
             self._render_plot()
 
-        resolution_slider.observe(_on_res, names="value")
-        return widgets.VBox([widgets.HBox([randomize_btn, zero_btn]), resolution_slider])
+        def _on_lines(change):
+            self.show_neuron_lines = bool(change["new"])
+            self._render_plot()
+
+        def _on_dual(change):
+            self.show_dual_graph = bool(change["new"])
+            self._render_plot()
+
+        view_slider.observe(_on_view, names="value")
+        lines_toggle.observe(_on_lines, names="value")
+        dual_toggle.observe(_on_dual, names="value")
+
+        return widgets.VBox([
+            widgets.HBox([randomize_btn, zero_btn]),
+            view_slider,
+            lines_toggle,
+            dual_toggle,
+        ])
 
     # --------------------------------------------------------- callbacks
 
@@ -214,13 +248,10 @@ class PolyhedraWidget:
     # ---------------------------------------------------------- plotting
 
     def _render_plot(self) -> None:
-        x_min, x_max, y_min, y_max = self.view_bounds
-        decomp = compute_decomposition(
-            self.net, x_min, x_max, y_min, y_max, resolution=self.resolution
-        )
-
-        n_regions = int(decomp.region_grid.max()) + 1
-        cmap = ListedColormap([_PALETTE[i % len(_PALETTE)] for i in range(n_regions)])
+        v = self.view_half
+        x_min, x_max, y_min, y_max = -v, v, -v, v
+        decomp = compute_decomposition(self.net, x_min, x_max, y_min, y_max)
+        n_regions = len(decomp.regions)
 
         with self._plot_output:
             self._plot_output.clear_output(wait=True)
@@ -230,20 +261,32 @@ class PolyhedraWidget:
                 axes = [axes]
             ax_decomp, *rest = axes
 
-            ax_decomp.imshow(
-                decomp.region_grid,
-                extent=(x_min, x_max, y_min, y_max),
-                origin="lower",
-                cmap=cmap,
-                interpolation="nearest",
-                vmin=0,
-                vmax=max(n_regions - 1, 1),
-            )
+            # Fill every polygon.
+            for region in decomp.regions:
+                color = _region_color(region.pattern)
+                patch = MplPolygon(
+                    region.polygon, closed=True,
+                    facecolor=color, edgecolor="none", alpha=0.85,
+                )
+                ax_decomp.add_patch(patch)
+
+            # Draw neuron boundary segments on top.
+            if self.show_neuron_lines:
+                for segs in decomp.neuron_segments:
+                    for p, q in segs:
+                        ax_decomp.plot(
+                            [p[0], q[0]], [p[1], q[1]],
+                            color="black", lw=1.0, solid_capstyle="round",
+                        )
+
+            ax_decomp.set_xlim(x_min, x_max)
+            ax_decomp.set_ylim(y_min, y_max)
+            ax_decomp.set_aspect("equal")
             ax_decomp.set_title(f"Polyhedral decomposition  ({n_regions} regions)")
-            ax_decomp.set_xlabel("x₁")
-            ax_decomp.set_ylabel("x₂")
-            ax_decomp.axhline(0, color="#333", lw=0.5)
-            ax_decomp.axvline(0, color="#333", lw=0.5)
+            ax_decomp.set_xlabel(r"$x_1$")
+            ax_decomp.set_ylabel(r"$x_2$")
+            ax_decomp.axhline(0, color="#333", lw=0.4, zorder=0.5)
+            ax_decomp.axvline(0, color="#333", lw=0.4, zorder=0.5)
 
             if self.show_dual_graph:
                 ax_dual = rest[0]
@@ -254,10 +297,10 @@ class PolyhedraWidget:
                         [centroids[i, 1], centroids[j, 1]],
                         color="#888", lw=1.0, zorder=1,
                     )
-                for rid in range(n_regions):
+                for idx, region in enumerate(decomp.regions):
                     ax_dual.scatter(
-                        centroids[rid, 0], centroids[rid, 1],
-                        s=120, c=_PALETTE[rid % len(_PALETTE)],
+                        centroids[idx, 0], centroids[idx, 1],
+                        s=120, c=_region_color(region.pattern),
                         edgecolors="black", linewidths=1.0, zorder=2,
                     )
                 ax_dual.set_xlim(x_min, x_max)
@@ -269,11 +312,13 @@ class PolyhedraWidget:
             plt.show()
             plt.close(fig)
 
+        total_neurons = self.net.hidden_neuron_count
         self._info.value = (
             f"<div style='font-family:monospace'>"
             f"architecture = {self.architecture} &nbsp;|&nbsp; "
-            f"hidden neurons = {self.net.hidden_neuron_count} &nbsp;|&nbsp; "
-            f"unique regions = {n_regions}"
+            f"hidden neurons = {total_neurons} &nbsp;|&nbsp; "
+            f"regions = {n_regions} &nbsp;|&nbsp; "
+            f"theoretical max (Zaslavsky) = {_zaslavsky_bound(total_neurons)}"
             f"</div>"
         )
 
@@ -284,3 +329,10 @@ class PolyhedraWidget:
 
     def _ipython_display_(self) -> None:
         self.display()
+
+
+def _zaslavsky_bound(h: int) -> int:
+    """Max number of regions h lines in general position can induce in the plane: 1 + h + C(h,2)."""
+    if h <= 0:
+        return 1
+    return 1 + h + h * (h - 1) // 2
