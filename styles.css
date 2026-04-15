@@ -172,6 +172,22 @@ button:hover {
     background: linear-gradient(135deg, #e74c3c, #c0392b)
 }
 
+.btn-undo {
+    background: linear-gradient(135deg, #8e44ad, #6c3483)
+}
+
+.btn-undo:disabled {
+    background: #cbd5e1;
+    color: #64748b;
+    cursor: not-allowed;
+    opacity: .7
+}
+
+.btn-undo:disabled:hover {
+    transform: none;
+    box-shadow: none
+}
+
 /* Neuron highlight buttons */
 .neuron-buttons {
     margin-top: 10px;

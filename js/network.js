@@ -235,6 +235,11 @@ function createNetwork() {
     if (targetFunctionControls) {
         targetFunctionControls.style.display = window.net.architecture[0] === 2 ? 'block' : 'none';
     }
+
+    // A full rebuild invalidates every saved snapshot — its state references
+    // an architecture that may no longer exist.
+    window._deleteHistory = [];
+    updateUndoButton();
 }
 
 function createInputs() {
@@ -437,16 +442,47 @@ function addNeuron(layerIdx) {
     refreshArchitectureUI(savedInputs)
 }
 
+// Stack of pre-delete snapshots so undoDelete() can revive deleted neurons
+// with their original weights/biases.
+window._deleteHistory = window._deleteHistory || []
+const DELETE_HISTORY_LIMIT = 50
+
 // Delete neuron `neuronIdx` from layer `layerIdx`. Splices out its incoming
 // row + bias and outgoing column; all other weights/biases are preserved
 // exactly (matches the new.json/old.json example).
 function removeNeuron(layerIdx, neuronIdx) {
     if (!window.net) return
     if (window.net.architecture[layerIdx] <= 1) return
-    const savedInputs = readInputValues()
+    const preInputs = readInputValues()
+    const snapshot = {
+        state: window.net.saveState(),
+        inputs: preInputs.slice()
+    }
+    const savedInputs = preInputs.slice()
     if (layerIdx === 0) savedInputs.splice(neuronIdx, 1)
     if (!window.net.deleteNeuron(layerIdx, neuronIdx)) return
+    window._deleteHistory.push(snapshot)
+    if (window._deleteHistory.length > DELETE_HISTORY_LIMIT) {
+        window._deleteHistory.shift()
+    }
     refreshArchitectureUI(savedInputs)
+}
+
+// Pop the last deletion snapshot and restore the network to that state.
+function undoDelete() {
+    if (!window.net) return
+    if (!window._deleteHistory || window._deleteHistory.length === 0) return
+    const snap = window._deleteHistory.pop()
+    window.net.loadState(snap.state)
+    refreshArchitectureUI(snap.inputs)
+}
+
+function updateUndoButton() {
+    const btn = document.getElementById('undo-delete-btn')
+    if (!btn) return
+    const count = window._deleteHistory ? window._deleteHistory.length : 0
+    btn.disabled = count === 0
+    btn.textContent = count > 0 ? `↶ Undo Delete (${count})` : '↶ Undo Delete'
 }
 
 function readInputValues() {
@@ -526,4 +562,6 @@ function refreshArchitectureUI(savedInputs) {
     if (targetFunctionControls) {
         targetFunctionControls.style.display = arch[0] === 2 ? 'block' : 'none'
     }
+
+    updateUndoButton()
 }
