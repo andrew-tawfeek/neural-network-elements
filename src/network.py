@@ -121,3 +121,31 @@ class MultiLayerNetwork:
         self.biases = [np.array(b, dtype=float) for b in state["biases"]]
         self.activations = []
         self.z_values = []
+
+    def to_state(self) -> dict:
+        """Return a pure-Python dict of the network's parameters that round-trips through
+        `MultiLayerNetwork.from_state`.
+
+        The layout matches the project's JSON save format (see `multilayer_network.json`):
+        weights are lists of rows, biases are lists of ``(n, 1)`` column vectors
+        (i.e. each bias is ``[[v1], [v2], ...]``), and an empty ``data`` field is included
+        so the dict is a drop-in for the JS save file.
+        """
+        return {
+            "architecture": list(self.architecture),
+            "weights": [w.tolist() for w in self.weights],
+            "biases":  [b.tolist() for b in self.biases],
+            "data":    [],
+        }
+
+    @classmethod
+    def from_state(cls, state: dict) -> "MultiLayerNetwork":
+        """Rebuild a network from the dict produced by `to_state`."""
+        net = cls(state["architecture"])
+        net.weights = [np.array(w, dtype=float) for w in state["weights"]]
+        net.biases = [np.array(b, dtype=float).reshape(-1, 1) for b in state["biases"]]
+        expected = [(net.architecture[i + 1], net.architecture[i]) for i in range(net.layers - 1)]
+        got = [w.shape for w in net.weights]
+        if got != expected:
+            raise ValueError(f"weight shapes {got} do not match architecture shapes {expected}")
+        return net

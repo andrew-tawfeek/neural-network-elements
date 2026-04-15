@@ -6,6 +6,7 @@ from .decomposition import (
     region_containing,
 )
 from .network import MultiLayerNetwork
+from .pp import pp, to_json_string
 from .widget import PolyhedraWidget
 
 __all__ = [
@@ -16,4 +17,6 @@ __all__ = [
     "build_dual_graph",
     "region_containing",
     "PolyhedraWidget",
+    "pp",
+    "to_json_string",
 ]
