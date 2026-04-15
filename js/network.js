@@ -149,18 +149,58 @@ class MultiLayerNetwork {
         // Restore the network to a previous state
         this.architecture = [...state.architecture];
         this.layers = this.architecture.length;
-        this.weights = state.weights.map(layer => 
+        this.weights = state.weights.map(layer =>
             layer.map(neuron => [...neuron])
         );
-        this.biases = state.biases.map(layer => 
+        this.biases = state.biases.map(layer =>
             layer.map(bias => [...bias])
         );
-        this.activations = state.activations ? state.activations.map(layer => 
+        this.activations = state.activations ? state.activations.map(layer =>
             layer.map(activation => [...activation])
         ) : [];
-        this.zValues = state.zValues ? state.zValues.map(layer => 
+        this.zValues = state.zValues ? state.zValues.map(layer =>
             layer.map(z => [...z])
         ) : [];
+    }
+
+    // Insert a new neuron at `position` in layer `layerIdx` with zero weights/bias.
+    // Other weights/biases of surrounding neurons are preserved exactly.
+    insertNeuron(layerIdx, position) {
+        if (layerIdx < 0 || layerIdx >= this.layers) return false
+        const pos = Math.max(0, Math.min(position, this.architecture[layerIdx]))
+        if (layerIdx > 0) {
+            const inSize = this.architecture[layerIdx - 1]
+            const newRow = new Array(inSize).fill(0)
+            this.weights[layerIdx - 1].splice(pos, 0, newRow)
+            this.biases[layerIdx - 1].splice(pos, 0, [0])
+        }
+        if (layerIdx < this.layers - 1) {
+            for (const row of this.weights[layerIdx]) {
+                row.splice(pos, 0, 0)
+            }
+        }
+        this.architecture[layerIdx]++
+        return true
+    }
+
+    // Delete the neuron at `position` in layer `layerIdx`.
+    // Incoming row + bias and outgoing column are spliced out; every other
+    // weight/bias elsewhere is preserved.
+    deleteNeuron(layerIdx, position) {
+        if (layerIdx < 0 || layerIdx >= this.layers) return false
+        if (this.architecture[layerIdx] <= 1) return false
+        if (position < 0 || position >= this.architecture[layerIdx]) return false
+        if (layerIdx > 0) {
+            this.weights[layerIdx - 1].splice(position, 1)
+            this.biases[layerIdx - 1].splice(position, 1)
+        }
+        if (layerIdx < this.layers - 1) {
+            for (const row of this.weights[layerIdx]) {
+                row.splice(position, 1)
+            }
+        }
+        this.architecture[layerIdx]--
+        return true
     }
 }
 
@@ -200,6 +240,25 @@ function createNetwork() {
 function createInputs() {
     const c = document.getElementById('input-controls')
     c.innerHTML = ''
+    const header = document.createElement('div')
+    header.className = 'layer-edit-header'
+    header.innerHTML = `<button class="btn-add-neuron" onclick="addNeuron(0)" title="Add input neuron">+ Input</button>`
+    c.appendChild(header)
+
+    const canRemove = window.net.architecture[0] > 1
+    const neuronBar = document.createElement('div')
+    neuronBar.className = 'neuron-bar'
+    let chipsHtml = `<span class="neuron-bar-label">Delete input:</span>`
+    if (!canRemove) {
+        chipsHtml += `<span class="neuron-bar-empty">(only one left)</span>`
+    } else {
+        for (let i = 0; i < window.net.architecture[0]; i++) {
+            chipsHtml += `<button class="neuron-chip" onclick="removeNeuron(0, ${i})" title="Delete input neuron ${i + 1}">${i + 1} <span class="chip-x">×</span></button>`
+        }
+    }
+    neuronBar.innerHTML = chipsHtml
+    c.appendChild(neuronBar)
+
     for (let i = 0; i < window.net.architecture[0]; i++) {
         const d = document.createElement('div')
         d.className = 'row'
@@ -216,9 +275,28 @@ function createWeights() {
         const layerDiv = document.createElement('div')
         layerDiv.className = 'layer'
         const layerName = l === window.net.layers - 2 ? 'Output' : `Hidden ${l + 1}`
+        const layerArchIdx = l + 1
 
-        // Layer title
-        layerDiv.innerHTML = `<div class="layer-title">${layerName} Layer ($W^{${l + 1}}$, $b^{${l + 1}}$)</div>`
+        // Layer title with "+ Neuron" button
+        layerDiv.innerHTML = `<div class="layer-title">
+            <span>${layerName} Layer ($W^{${l + 1}}$, $b^{${l + 1}}$)</span>
+            <button class="btn-add-neuron" onclick="addNeuron(${layerArchIdx})" title="Add neuron to ${layerName} layer">+ Neuron</button>
+        </div>`
+
+        // Per-neuron delete chips (prominent row right under the layer title).
+        const canRemoveLayer = window.net.architecture[layerArchIdx] > 1
+        const neuronBar = document.createElement('div')
+        neuronBar.className = 'neuron-bar'
+        let chipsHtml = `<span class="neuron-bar-label">Delete neuron:</span>`
+        if (!canRemoveLayer) {
+            chipsHtml += `<span class="neuron-bar-empty">(only one left)</span>`
+        } else {
+            for (let i = 0; i < window.net.architecture[layerArchIdx]; i++) {
+                chipsHtml += `<button class="neuron-chip" onclick="removeNeuron(${layerArchIdx}, ${i})" title="Delete neuron ${i + 1} from ${layerName} layer">${i + 1} <span class="chip-x">×</span></button>`
+            }
+        }
+        neuronBar.innerHTML = chipsHtml
+        layerDiv.appendChild(neuronBar)
 
         // Weights section
         const weightsDiv = document.createElement('div')
@@ -243,23 +321,29 @@ function createWeights() {
         }
         layerDiv.appendChild(weightsDiv)
 
-        // Biases section
+        // Biases section (the [×] button on each bias row deletes that neuron
+        // — its incoming row + bias and its outgoing column — leaving every
+        // other weight/bias untouched.)
         const biasesDiv = document.createElement('div')
-        biasesDiv.innerHTML = `<div style="font-weight:500;color:#2c3e50;margin:10px 0">Biases:</div>`
+        biasesDiv.innerHTML = `<div style="font-weight:500;color:#2c3e50;margin:10px 0">Biases <span style="font-weight:400;color:#888;font-size:11px">(× removes the neuron)</span>:</div>`
 
+        const canRemove = window.net.architecture[layerArchIdx] > 1
         for (let i = 0; i < window.net.architecture[l + 1]; i++) {
             const b = document.createElement('div')
             b.className = 'weight-row'
             const bv = window.net.biases[l][i][0]
+            const removeBtn = canRemove
+                ? `<button class="btn-remove-neuron" onclick="removeNeuron(${layerArchIdx}, ${i})" title="Remove neuron ${i + 1} from ${layerName} layer">×</button>`
+                : ''
             b.innerHTML = `
         <span class="weight-label" id="label-b${l}-${i}">$b^{${l + 1}}_{${i + 1}}$:</span>
         <div class="info" data-tip="Bias for layer ${l + 1} neuron ${i + 1}">i</div>
         <div class="slider-container">
-            <input type="range" min="-3" max="3" step="0.1" value="${bv.toFixed(1)}" 
+            <input type="range" min="-3" max="3" step="0.1" value="${bv.toFixed(1)}"
                    oninput="updateB(${l},${i},this.value)" id="s-b${l}-${i}">
-            <input type="number" step="0.1" value="${bv.toFixed(2)}" 
+            <input type="number" step="0.1" value="${bv.toFixed(2)}"
                    onchange="updateBN(${l},${i},this.value)" id="n-b${l}-${i}">
-        </div>`
+        </div>${removeBtn}`
             biasesDiv.appendChild(b)
         }
         layerDiv.appendChild(biasesDiv)
@@ -339,4 +423,107 @@ function zero() {
 
 function reset() {
     createNetwork()
+}
+
+// Add a neuron at the end of layer `layerIdx` (architecture index).
+// Incoming weights/bias and outgoing column are initialized to 0 so the
+// network's function is unchanged; surrounding neurons are untouched.
+function addNeuron(layerIdx) {
+    if (!window.net) return
+    const savedInputs = readInputValues()
+    if (layerIdx === 0) savedInputs.push(0)
+    const position = window.net.architecture[layerIdx]
+    if (!window.net.insertNeuron(layerIdx, position)) return
+    refreshArchitectureUI(savedInputs)
+}
+
+// Delete neuron `neuronIdx` from layer `layerIdx`. Splices out its incoming
+// row + bias and outgoing column; all other weights/biases are preserved
+// exactly (matches the new.json/old.json example).
+function removeNeuron(layerIdx, neuronIdx) {
+    if (!window.net) return
+    if (window.net.architecture[layerIdx] <= 1) return
+    const savedInputs = readInputValues()
+    if (layerIdx === 0) savedInputs.splice(neuronIdx, 1)
+    if (!window.net.deleteNeuron(layerIdx, neuronIdx)) return
+    refreshArchitectureUI(savedInputs)
+}
+
+function readInputValues() {
+    const values = []
+    for (let i = 0; i < window.net.architecture[0]; i++) {
+        const el = document.getElementById(`input-${i}`)
+        values.push(el ? parseFloat(el.value) || 0 : 0)
+    }
+    return values
+}
+
+function refreshArchitectureUI(savedInputs) {
+    const arch = window.net.architecture
+
+    // Keep the architecture text fields in sync so "Rebuild Network" still
+    // reflects the current shape.
+    const inSizeEl = document.getElementById('input-size')
+    const outSizeEl = document.getElementById('output-size')
+    const hiddenEl = document.getElementById('hidden-layers')
+    if (inSizeEl) inSizeEl.value = arch[0]
+    if (outSizeEl) outSizeEl.value = arch[arch.length - 1]
+    if (hiddenEl) hiddenEl.value = arch.slice(1, -1).join(',')
+
+    createInputs()
+    createWeights()
+
+    if (savedInputs) {
+        for (let i = 0; i < arch[0]; i++) {
+            const el = document.getElementById(`input-${i}`)
+            if (el && i < savedInputs.length) el.value = savedInputs[i]
+        }
+    }
+
+    // Training data is indexed by input/output dimension — drop it if it no
+    // longer matches the new shape.
+    const inputSize = arch[0]
+    const outputSize = arch[arch.length - 1]
+    if (typeof TrainingManager !== 'undefined' && TrainingManager.data && TrainingManager.data.length > 0) {
+        const stillValid = TrainingManager.data.every(p =>
+            p.inputs && p.inputs.length === inputSize &&
+            p.targets && p.targets.length === outputSize)
+        if (!stillValid) {
+            TrainingManager.data = []
+            TrainingManager.stepCounter = 0
+            if (typeof TrainingManager.updateDataDisplay === 'function') {
+                TrainingManager.updateDataDisplay()
+            }
+        }
+    }
+
+    // Saved loss-history states reference the old architecture and would
+    // crash loadState on click, so clear them.
+    if (typeof LossGraph !== 'undefined' && LossGraph.clearHistory) {
+        LossGraph.clearHistory()
+    }
+    if (typeof TrainingManager !== 'undefined') {
+        TrainingManager.stepCounter = 0
+    }
+
+    forward()
+    if (typeof NetworkVisualization !== 'undefined' && NetworkVisualization.draw) {
+        NetworkVisualization.draw()
+    }
+    if (typeof BinaryDisplay !== 'undefined' && BinaryDisplay.update) {
+        BinaryDisplay.update()
+    }
+    if (typeof DecisionBoundary !== 'undefined' && DecisionBoundary.update) {
+        DecisionBoundary.update()
+    }
+    if (typeof PlotManager !== 'undefined' && PlotManager.initialize) {
+        PlotManager.initialize()
+    }
+
+    // 2D/3D plot panels and target-function controls are gated on
+    // architecture[0] === 2.
+    const targetFunctionControls = document.getElementById('target-function-controls')
+    if (targetFunctionControls) {
+        targetFunctionControls.style.display = arch[0] === 2 ? 'block' : 'none'
+    }
 }
