@@ -39,6 +39,7 @@ function initializeApplication() {
         if (typeof TrainingManager !== 'undefined' && TrainingManager.initializeFromUI) {
             console.log('Initializing TrainingManager...');
             TrainingManager.initializeFromUI();
+            TrainingManager.setupTrainButton();
         }
         
         if (typeof LossGraph !== 'undefined' && LossGraph.init) {

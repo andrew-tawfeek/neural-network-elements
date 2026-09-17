@@ -35,7 +35,7 @@ const Visualization3D = {
             canvas: container,
             antialias: true
         });
-        this.renderer.setSize(containerWidth, containerHeight);
+        this.renderer.setSize(containerWidth, containerHeight, false);
         
         // Add axis helper
         const axesHelper = new THREE.AxesHelper(5);
@@ -79,7 +79,7 @@ const Visualization3D = {
         
         this.camera.aspect = containerWidth / containerHeight;
         this.camera.updateProjectionMatrix();
-        this.renderer.setSize(containerWidth, containerHeight);
+        this.renderer.setSize(containerWidth, containerHeight, false);
     },
 
     clearPoints() {

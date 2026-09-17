@@ -34,8 +34,12 @@
 </head>
 
 <body>
+    <nav class="mobile-navigation" aria-label="Page sections">
+        <a href="#controls">Controls</a>
+        <a href="#network">Network & plots</a>
+    </nav>
     <div class="container">
-        <div class="controls">
+        <div class="controls" id="controls">
             <div class="header">
                 <h1>Multi-Layer Neural Network</h1>
                 <p>Adjust architecture, weights, biases, and training</p>
@@ -81,7 +85,7 @@
                 <div class="row">
                     <label>Training Speed:</label>
                     <div class="info" data-tip="Time between training steps when holding button (milliseconds)">i</div>
-                    <input type="number" id="training-interval" value="1000" step="100" min="100" max="5000" onchange="updateTrainingInterval(this.value)">
+                    <input type="number" id="training-interval" value="1000" step="100" min="100" max="5000" onchange="TrainingManager.updateTrainingInterval(this.value)">
                 </div>
                 <div style="border-top: 1px solid #e0e0e0; margin: 10px 0; padding-top: 10px;">
                     <div class="row">
@@ -103,7 +107,7 @@
                     <button onclick="addData()">Add Data Point</button>
                     <button onclick="clearData()" class="btn-reset">Clear Data</button>
                 </div>
-                <button onmousedown="handleTrainButtonDown()" onmouseup="handleTrainButtonUp()" onmouseleave="handleTrainButtonUp()" class="btn-train">Train 1 Step</button>
+                <button id="train-step" class="btn-train">Train 1 Step</button>
                 <button onclick="trainBatch()" class="btn-train">Train 100 Steps</button>
                 <div style="display: flex; gap: 5px; margin-top: 5px;">
                     <button onclick="playTraining()" id="play-btn" class="btn-train" style="background-color: #27ae60;">▶ Play</button>
@@ -140,8 +144,13 @@
                 </div>
             </div>
         </div>
-        <div class="network">
+        <div class="network" id="network">
             <canvas id="canvas" width="800" height="600"></canvas>
+            <div class="canvas-controls" aria-label="Network view controls">
+                <button onclick="zoomOut()" aria-label="Zoom out network">−</button>
+                <button onclick="fitToView()">Fit network</button>
+                <button onclick="zoomIn()" aria-label="Zoom in network">+</button>
+            </div>
             <div class="info-panel">
                 <div id="output">Click "Forward Pass" to see network output</div>
                 <div id="error" style="color:#e74c3c;font-weight:bold;text-align:center;margin:8px 0"></div>
@@ -153,8 +162,8 @@
                     <div class="plot-container">
                         <div class="plot-switch">
                             <label>Plot Type:</label>
-                            <div class="switch-toggle" id="plot-type-switch" onclick="togglePlotType()">
-                            </div>
+                            <button class="switch-toggle" id="plot-type-switch" onclick="togglePlotType()" aria-label="Toggle 2D and 3D plot">
+                            </button>
                             <span id="plot-type-label">2D Plot</span>
                         </div>
                         <div id="plot-container">
@@ -172,9 +181,11 @@
                                         <span id="resolution-value">70</span>
                                         <div style="margin-left: 15px; display: flex; align-items: center; gap: 5px;">
                                             <button onclick="DecisionBoundary.resetView()" style="font-size: 12px; padding: 4px 8px; margin-left: 5px;">Reset View</button>
+                                            <button onclick="DecisionBoundary.zoomAt(0.9)" aria-label="Zoom out plot">−</button>
+                                            <button onclick="DecisionBoundary.zoomAt(1.1)" aria-label="Zoom in plot">+</button>
                                         </div>
                                     </div>
-                                    <div class="plot-legend">Colors show binary activation patterns. Drag to pan, scroll to zoom.</div>
+                                    <div class="plot-legend">Colors show binary activation patterns. Drag to pan; use +/− or scroll to zoom. Tap to select a point.</div>
                                     <div id="neuron-buttons-container" class="neuron-buttons">
                                         <!-- Neuron buttons will be dynamically added here -->
                                     </div>

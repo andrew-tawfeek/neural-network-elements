@@ -4,7 +4,7 @@ const TrainingManager = {
     continuousTrainingTimer: null,
     isContinuousTraining: false,
     holdTimer: null,
-    holdDelay: 100, // 500ms delay before starting continuous training
+    holdDelay: 500, // Allow a normal tap before starting continuous training
     trainingInterval: 1000, // milliseconds between training steps (1 second default)
     stepCounter: 0, // Track training steps for loss graph
 
@@ -126,6 +126,36 @@ const TrainingManager = {
         this.holdTimer = setTimeout(() => {
             this.startContinuousTraining();
         }, this.holdDelay);
+    },
+
+    setupTrainButton() {
+        const button = document.getElementById('train-step');
+        let activePointer = null;
+        button.addEventListener('pointerdown', event => {
+            if (event.button !== 0 || activePointer !== null) return;
+            activePointer = event.pointerId;
+            button.setPointerCapture(event.pointerId);
+            this.handleTrainButtonDown();
+        });
+        button.addEventListener('pointerup', event => {
+            if (event.pointerId !== activePointer) return;
+            activePointer = null;
+            this.handleTrainButtonUp();
+        });
+        const cancelHold = () => {
+            if (activePointer === null) return;
+            activePointer = null;
+            clearTimeout(this.holdTimer);
+            this.holdTimer = null;
+            if (this.isContinuousTraining) this.stopContinuousTraining();
+        };
+        button.addEventListener('pointercancel', cancelHold);
+        button.addEventListener('lostpointercapture', cancelHold);
+        window.addEventListener('blur', cancelHold);
+        // Keyboard and assistive-technology clicks have no pointer press.
+        button.addEventListener('click', event => {
+            if (event.detail === 0) this.trainStep();
+        });
     },
 
     handleTrainButtonUp() {

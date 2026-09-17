@@ -37,8 +37,8 @@ const DecisionBoundary = {
         this.plotCanvas.addEventListener('click', e => {
             if (!window.net || window.net.architecture[0] !== 2 || this.isDragging) return;
             const rect = this.plotCanvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) / 300;
-            const y = (e.clientY - rect.top) / 300;
+            const x = (e.clientX - rect.left) / rect.width;
+            const y = (e.clientY - rect.top) / rect.height;
             
             // Convert to real coordinates using current view bounds
             const xVal = this.viewBounds.xMin + x * (this.viewBounds.xMax - this.viewBounds.xMin);
@@ -50,58 +50,44 @@ const DecisionBoundary = {
             forward();
         });
 
-        // Mouse down - start potential drag
-        this.plotCanvas.addEventListener('mousedown', e => {
-            if (!window.net || window.net.architecture[0] !== 2) return;
-            this.isDragging = false; // Will be set to true on first mouse move
-            this.lastMousePos = { x: e.clientX, y: e.clientY };
+        let activePointer = null;
+        let startPosition = null;
+        this.plotCanvas.addEventListener('pointerdown', e => {
+            if (!window.net || window.net.architecture[0] !== 2 || activePointer !== null || e.button !== 0) return;
+            activePointer = e.pointerId;
+            this.isDragging = false;
+            startPosition = { x: e.clientX, y: e.clientY };
+            this.lastMousePos = startPosition;
+            this.plotCanvas.setPointerCapture(e.pointerId);
             this.plotCanvas.style.cursor = 'grabbing';
-            e.preventDefault();
         });
 
-        // Mouse move - handle dragging
-        this.plotCanvas.addEventListener('mousemove', e => {
-            if (!window.net || window.net.architecture[0] !== 2) return;
-            
+        this.plotCanvas.addEventListener('pointermove', e => {
+            if (e.pointerId !== activePointer) return;
+            if (!this.isDragging && Math.hypot(e.clientX - startPosition.x, e.clientY - startPosition.y) < 5) return;
+            this.isDragging = true;
             const rect = this.plotCanvas.getBoundingClientRect();
-            
-            // Check if mouse is down (we're in a potential drag)
-            if (e.buttons === 1) {
-                this.isDragging = true;
-                
-                const deltaX = e.clientX - this.lastMousePos.x;
-                const deltaY = e.clientY - this.lastMousePos.y;
-                
-                // Convert pixel delta to real coordinate delta
-                const viewWidth = this.viewBounds.xMax - this.viewBounds.xMin;
-                const viewHeight = this.viewBounds.yMax - this.viewBounds.yMin;
-                const realDeltaX = -(deltaX / 300) * viewWidth; // Negative for natural panning
-                const realDeltaY = (deltaY / 300) * viewHeight; // Positive because Y is flipped
-                
-                // Update view bounds
-                this.viewBounds.xMin += realDeltaX;
-                this.viewBounds.xMax += realDeltaX;
-                this.viewBounds.yMin += realDeltaY;
-                this.viewBounds.yMax += realDeltaY;
-                
-                this.lastMousePos = { x: e.clientX, y: e.clientY };
-                this.update(); // Redraw with new bounds
-            } else {
-                this.plotCanvas.style.cursor = 'grab';
-            }
+            const viewWidth = this.viewBounds.xMax - this.viewBounds.xMin;
+            const viewHeight = this.viewBounds.yMax - this.viewBounds.yMin;
+            const deltaX = -(e.clientX - this.lastMousePos.x) / rect.width * viewWidth;
+            const deltaY = (e.clientY - this.lastMousePos.y) / rect.height * viewHeight;
+            this.viewBounds.xMin += deltaX;
+            this.viewBounds.xMax += deltaX;
+            this.viewBounds.yMin += deltaY;
+            this.viewBounds.yMax += deltaY;
+            this.lastMousePos = { x: e.clientX, y: e.clientY };
+            this.update();
         });
 
-        // Mouse up - end drag
-        this.plotCanvas.addEventListener('mouseup', e => {
-            setTimeout(() => { this.isDragging = false; }, 10); // Small delay to prevent click after drag
+        const endDrag = e => {
+            if (e.pointerId !== activePointer) return;
+            activePointer = null;
+            // Keep isDragging until the next pointerdown to suppress a drag's click.
             this.plotCanvas.style.cursor = 'grab';
-        });
-
-        // Mouse leave - end drag
-        this.plotCanvas.addEventListener('mouseleave', e => {
-            setTimeout(() => { this.isDragging = false; }, 10);
-            this.plotCanvas.style.cursor = 'default';
-        });
+        };
+        this.plotCanvas.addEventListener('pointerup', endDrag);
+        this.plotCanvas.addEventListener('pointercancel', endDrag);
+        this.plotCanvas.addEventListener('lostpointercapture', endDrag);
 
         // Set initial cursor
         this.plotCanvas.style.cursor = 'grab';
@@ -112,37 +98,26 @@ const DecisionBoundary = {
             e.preventDefault();
             
             const rect = this.plotCanvas.getBoundingClientRect();
-            const mouseX = (e.clientX - rect.left) / 300; // Mouse position in canvas (0-1)
-            const mouseY = (e.clientY - rect.top) / 300;
+            const mouseX = (e.clientX - rect.left) / rect.width; // Mouse position in canvas (0-1)
+            const mouseY = (e.clientY - rect.top) / rect.height;
             
-            // Convert mouse position to real coordinates (before zoom)
-            const realMouseX = this.viewBounds.xMin + mouseX * (this.viewBounds.xMax - this.viewBounds.xMin);
-            const realMouseY = this.viewBounds.yMax - mouseY * (this.viewBounds.yMax - this.viewBounds.yMin);
-            
-            // Calculate zoom factor
-            const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9; // Zoom in/out
-            const newZoomLevel = this.zoomLevel * zoomFactor;
-            
-            // Clamp zoom level - REMOVED to allow unlimited zooming
-            // if (newZoomLevel < this.minZoom || newZoomLevel > this.maxZoom) return;
-            
-            this.zoomLevel = newZoomLevel;
-            
-            // Calculate new view bounds centered on mouse position
-            const currentWidth = this.viewBounds.xMax - this.viewBounds.xMin;
-            const currentHeight = this.viewBounds.yMax - this.viewBounds.yMin;
-            
-            const newWidth = currentWidth / zoomFactor;
-            const newHeight = currentHeight / zoomFactor;
-            
-            // Center the zoom on the mouse position
-            this.viewBounds.xMin = realMouseX - (realMouseX - this.viewBounds.xMin) * (newWidth / currentWidth);
-            this.viewBounds.xMax = this.viewBounds.xMin + newWidth;
-            this.viewBounds.yMin = realMouseY - (realMouseY - this.viewBounds.yMin) * (newHeight / currentHeight);
-            this.viewBounds.yMax = this.viewBounds.yMin + newHeight;
-            
-            this.update();
-        });
+            this.zoomAt(e.deltaY < 0 ? 1.1 : 0.9, mouseX, mouseY);
+        }, { passive: false });
+    },
+
+    // Buttons zoom at the center; wheel input zooms at the cursor.
+    zoomAt(factor, x = 0.5, y = 0.5) {
+        if (!window.net || window.net.architecture[0] !== 2) return;
+        const width = this.viewBounds.xMax - this.viewBounds.xMin;
+        const height = this.viewBounds.yMax - this.viewBounds.yMin;
+        const anchorX = this.viewBounds.xMin + x * width;
+        const anchorY = this.viewBounds.yMax - y * height;
+        this.zoomLevel *= factor;
+        this.viewBounds.xMin = anchorX - x * width / factor;
+        this.viewBounds.xMax = this.viewBounds.xMin + width / factor;
+        this.viewBounds.yMax = anchorY + y * height / factor;
+        this.viewBounds.yMin = this.viewBounds.yMax - height / factor;
+        this.update();
     },
 
     update() {

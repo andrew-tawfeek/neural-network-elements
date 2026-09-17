@@ -19,6 +19,7 @@ const LossGraph = {
         this.isInitialized = true;
         this.setupEventListeners();
         this.draw();
+        return true;
     },
 
     setupEventListeners() {
@@ -331,8 +332,8 @@ const LossGraph = {
         if (this.lossHistory.length === 0) return;
         
         const rect = this.canvas.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
+        const x = (event.clientX - rect.left) * this.canvas.width / rect.width;
+        const y = (event.clientY - rect.top) * this.canvas.height / rect.height;
         
         // Convert click position to step number
         const margin = { left: 60, right: 30, top: 20, bottom: 50 };
@@ -355,7 +356,7 @@ const LossGraph = {
         }
         
         const rect = this.canvas.getBoundingClientRect();
-        const x = event.clientX - rect.left;
+        const x = (event.clientX - rect.left) * this.canvas.width / rect.width;
         const margin = { left: 60, right: 30, top: 20, bottom: 50 };
         const plotWidth = this.canvas.width - margin.left - margin.right;
         const relativeX = (x - margin.left) / plotWidth;

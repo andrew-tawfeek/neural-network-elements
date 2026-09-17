@@ -266,8 +266,9 @@ function createWeights() {
         c.appendChild(layerDiv)
     }
 
-    // Trigger MathJax to rerender the math notation
-    if (window.MathJax) {
+    // The async MathJax script may still be loading on a slow connection.
+    // Its initial typeset will pick up these controls when it becomes ready.
+    if (typeof window.MathJax?.typesetPromise === 'function') {
         MathJax.typesetPromise();
     }
 }

@@ -123,6 +123,12 @@ Below are links to detailed tutorials covering various aspects of the applicatio
 - **3D Plot**: Surface visualization for 2-input, 1-output networks
 - **Dual Graph**: Graph-theoretic representation of region adjacency
 
+### Phones & Tablets
+- The page stacks into a scrollable layout, with **Controls** and **Network & plots** links to jump between sections.
+- Drag the network or decision plot with a finger to pan. Use the **+ / −** buttons to zoom and **Fit network** or **Reset View** to restore the view.
+- Tap the decision plot to select an input point, or tap the loss graph to restore a training step.
+- Tap **Train 1 Step** once to train, or hold it for continuous training; releasing stops the hold.
+
 ### Training Features
 - **Learning Rate**: 0.001-1.0 (default: 0.01)
 - **Training Speed**: Configurable interval for continuous training

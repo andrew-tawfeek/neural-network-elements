@@ -19,6 +19,7 @@ body {
 
 .controls {
     width: 450px;
+    flex-shrink: 0;
     background: #fff;
     overflow-y: auto;
     border-right: 2px solid #e0e0e0;
@@ -27,6 +28,7 @@ body {
 
 .network {
     flex: 1;
+    min-width: 0;
     background: #fafafa;
     display: flex;
     flex-direction: column;
@@ -71,6 +73,7 @@ body {
 
 .row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     margin-bottom: 12px;
     gap: 8px
@@ -130,6 +133,7 @@ input[type=number] {
 
 input[type=range] {
     flex: 1;
+    min-width: 0;
     margin: 0 8px
 }
 
@@ -228,6 +232,9 @@ button:hover {
 }
 
 #canvas {
+    max-width: 100%;
+    height: auto;
+    flex-shrink: 0;
     border: 2px solid #e0e0e0;
     border-radius: 10px;
     background: #fff;
@@ -273,6 +280,7 @@ button:hover {
     display: flex;
     align-items: center;
     flex: 1;
+    min-width: 0;
     gap: 6px
 }
 
@@ -308,12 +316,19 @@ button:hover {
     padding: 15px;
     margin-top: 10px;
     display: flex;
+    flex-wrap: wrap;
     gap: 15px
 }
 
 .binary-vectors {
-    flex: 1;
-    min-width: 200px;
+    flex: 1 1 200px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.plot-container {
+    flex: 3 1 640px;
+    min-width: 0;
 }
 
 .binary-layer {
@@ -378,6 +393,7 @@ button:hover {
     padding-top: 10px;
     border-top: 1px solid #eee;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 10px;
     font-size: 12px;
@@ -405,21 +421,19 @@ button:hover {
 }
 
 .plot-layout {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
     gap: 20px;
     margin-top: 10px;
 }
 
-.plot-layout.side.by.side {
-    flex-direction: row;
-}
-
 .plot-layout.stacked {
-    flex-direction: column;
+    grid-template-columns: 1fr;
 }
 
 .plot-window {
     flex: 1;
+    min-width: 0;
     background: #fff;
     border: 1px solid #e0e0e0;
     border-radius: 8px;
@@ -474,6 +488,8 @@ button:hover {
     cursor: pointer;
     position: relative;
     transition: background-color 0.3s;
+    flex-shrink: 0;
+    margin: 0;
 }
 
 .switch-toggle.active {
@@ -488,6 +504,7 @@ button:hover {
     border-radius: 50%;
     position: absolute;
     left: 2px;
+    top: 2px;
     transition: transform 0.3s;
 }
 
@@ -526,6 +543,8 @@ button:hover {
 
 .loss-controls {
     display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
     justify-content: space-between;
     align-items: center;
     margin-top: 10px;
@@ -571,4 +590,182 @@ button:hover {
     color: #666;
     font-size: 11px;
     margin-top: 2px;
+}
+
+/* Scale the display only; drawing coordinates remain in canvas pixels. */
+#plot-canvas,
+#dual-graph-canvas,
+#loss-graph-canvas {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin-inline: auto;
+}
+
+#canvas,
+#plot-canvas,
+#train-step {
+    touch-action: none;
+}
+
+.canvas-controls {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.mobile-navigation {
+    display: none;
+}
+
+button:focus-visible,
+a:focus-visible {
+    outline: 3px solid #2980b9;
+    outline-offset: 3px;
+}
+
+#output,
+#error,
+.training {
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 1000px) {
+    body {
+        height: auto;
+        overflow: auto;
+    }
+
+    .container {
+        height: auto;
+        min-height: 100vh;
+        flex-direction: column;
+    }
+
+    .mobile-navigation {
+        display: flex;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: #2c3e50;
+    }
+
+    .mobile-navigation a {
+        flex: 1;
+        padding: 14px 8px;
+        text-align: center;
+        color: #fff;
+        font-size: 14px;
+        text-decoration: none;
+    }
+
+    .controls,
+    .network {
+        width: 100%;
+        overflow: visible;
+        scroll-margin-top: 52px;
+    }
+
+    .controls {
+        border-right: 0;
+        border-bottom: 2px solid #e0e0e0;
+    }
+
+    button,
+    input[type=number],
+    input[type=text],
+    select {
+        min-height: 44px;
+    }
+
+    input[type=number],
+    input[type=text],
+    select,
+    textarea {
+        font-size: 16px !important;
+        max-width: 100%;
+    }
+
+    input[type=range] {
+        min-height: 44px;
+    }
+
+    .switch-toggle {
+        height: 44px;
+        width: 52px;
+    }
+
+    .switch-toggle::before {
+        top: 14px;
+        left: 8px;
+    }
+}
+
+@media (max-width: 600px) {
+    .controls,
+    .network {
+        padding: 12px;
+    }
+
+    .header {
+        margin: -12px -12px 16px;
+        padding: 20px 12px;
+    }
+
+    .header h1 {
+        font-size: 1.6em;
+    }
+
+    .group,
+    .info-panel,
+    .binary-display,
+    .loss-graph-container {
+        padding: 10px;
+    }
+
+    .row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 20px;
+        gap: 6px;
+    }
+
+    .row > input,
+    .row > .slider-container,
+    .row > button {
+        grid-column: 1 / -1;
+        width: 100% !important;
+        margin-inline: 0 !important;
+    }
+
+    .row .info:hover::after {
+        left: auto;
+        right: 0;
+        transform: none;
+    }
+
+    .weight-row {
+        flex-wrap: wrap;
+        padding-left: 0;
+    }
+
+    .weight-row .slider-container {
+        flex-basis: 100%;
+    }
+
+    .slider-container input[type=number] {
+        flex: 0 0 80px;
+    }
+
+    .binary-display {
+        gap: 12px;
+    }
+
+    .binary-vectors,
+    .plot-container {
+        flex-basis: 100%;
+    }
+
+    .window-controls input[type=range] {
+        flex-basis: 80px;
+    }
 }

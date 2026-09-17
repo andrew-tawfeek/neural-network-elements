@@ -43,34 +43,34 @@ const NetworkVisualization = {
     },
 
     setupEventListeners() {
-        this.canvas.addEventListener('mousedown', e => {
+        let activePointer = null;
+        this.canvas.addEventListener('pointerdown', e => {
+            if (activePointer !== null || e.button !== 0) return;
+            activePointer = e.pointerId;
             this.isDragging = true;
             this.lastMouseX = e.clientX;
             this.lastMouseY = e.clientY;
+            this.canvas.setPointerCapture(e.pointerId);
         });
 
-        this.canvas.addEventListener('mousemove', e => {
-            if (this.isDragging) {
-                const deltaX = e.clientX - this.lastMouseX;
-                const deltaY = e.clientY - this.lastMouseY;
-                this.panX += deltaX;
-                this.panY += deltaY;
-                this.lastMouseX = e.clientX;
-                this.lastMouseY = e.clientY;
-                // Only redraw, don't recalculate network state
-                requestAnimationFrame(() => {
-                    this.draw(true); // Pass true to indicate this is just a visual update
-                });
-            }
+        this.canvas.addEventListener('pointermove', e => {
+            if (e.pointerId !== activePointer) return;
+            const rect = this.canvas.getBoundingClientRect();
+            this.panX += (e.clientX - this.lastMouseX) * this.canvas.width / rect.width;
+            this.panY += (e.clientY - this.lastMouseY) * this.canvas.height / rect.height;
+            this.lastMouseX = e.clientX;
+            this.lastMouseY = e.clientY;
+            this.draw(true);
         });
 
-        this.canvas.addEventListener('mouseup', () => {
+        const endDrag = e => {
+            if (e.pointerId !== activePointer) return;
+            activePointer = null;
             this.isDragging = false;
-        });
-
-        this.canvas.addEventListener('mouseleave', () => {
-            this.isDragging = false;
-        });
+        };
+        this.canvas.addEventListener('pointerup', endDrag);
+        this.canvas.addEventListener('pointercancel', endDrag);
+        this.canvas.addEventListener('lostpointercapture', endDrag);
 
         this.canvas.addEventListener('wheel', e => {
             e.preventDefault();
@@ -84,8 +84,8 @@ const NetworkVisualization = {
             
             // Get mouse position relative to canvas
             const rect = this.canvas.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
+            const mouseX = (e.clientX - rect.left) * this.canvas.width / rect.width;
+            const mouseY = (e.clientY - rect.top) * this.canvas.height / rect.height;
             
             // Calculate zoom factor based on delta magnitude for smoother scrolling
             const zoomIntensity = 0.1;
@@ -96,32 +96,6 @@ const NetworkVisualization = {
             this.zoomTowards(mouseX, mouseY, scaleFactor);
         });
 
-        // Add touch support for mobile devices
-        this.canvas.addEventListener('touchstart', e => {
-            e.preventDefault();
-            if (e.touches.length === 1) {
-                this.isDragging = true;
-                this.lastMouseX = e.touches[0].clientX;
-                this.lastMouseY = e.touches[0].clientY;
-            }
-        });
-
-        this.canvas.addEventListener('touchmove', e => {
-            e.preventDefault();
-            if (e.touches.length === 1 && this.isDragging) {
-                const deltaX = e.touches[0].clientX - this.lastMouseX;
-                const deltaY = e.touches[0].clientY - this.lastMouseY;
-                this.panX += deltaX;
-                this.panY += deltaY;
-                this.lastMouseX = e.touches[0].clientX;
-                this.lastMouseY = e.touches[0].clientY;
-            }
-        });
-
-        this.canvas.addEventListener('touchend', e => {
-            e.preventDefault();
-            this.isDragging = false;
-        });
     },
 
     startAnimationLoop() {
