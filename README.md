@@ -125,6 +125,7 @@ Below are links to detailed tutorials covering various aspects of the applicatio
 
 ### Phones & Tablets
 - The page stacks into a scrollable layout, with **Controls** and **Network & plots** links to jump between sections.
+- Weight and bias controls stay docked at the bottom so you can adjust them while watching the plots. Scroll inside the panel to reach each layer, or use **Hide / Show** to collapse and reopen it.
 - Drag the network or decision plot with a finger to pan. Use the **+ / −** buttons to zoom and **Fit network** or **Reset View** to restore the view.
 - Tap the decision plot to select an input point, or tap the loss graph to restore a training step.
 - Tap **Train 1 Step** once to train, or hold it for continuous training; releasing stops the hold.

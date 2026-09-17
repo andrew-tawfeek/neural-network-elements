@@ -70,6 +70,16 @@ function initializeApplication() {
 // Initialize application when DOM is loaded
 document.addEventListener('DOMContentLoaded', initializeApplication);
 
+// Reuse the same live controls in the mobile dock and desktop sidebar.
+document.addEventListener('DOMContentLoaded', () => {
+    const toggle = document.getElementById('weight-panel-toggle');
+    toggle.addEventListener('click', () => {
+        const collapsed = document.documentElement.classList.toggle('weights-collapsed');
+        toggle.setAttribute('aria-expanded', String(!collapsed));
+        toggle.textContent = collapsed ? 'Show' : 'Hide';
+    });
+});
+
 // Zoom control functions for UI integration
 function setZoomFromSlider(value) {
     const zoomLevel = parseFloat(value) / 100;

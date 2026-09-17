@@ -618,6 +618,10 @@ button:hover {
     display: none;
 }
 
+#weight-panel-toggle {
+    display: none;
+}
+
 button:focus-visible,
 a:focus-visible {
     outline: 3px solid #2980b9;
@@ -631,6 +635,18 @@ a:focus-visible {
 }
 
 @media (max-width: 1000px) {
+    :root {
+        --weight-panel-height: clamp(180px, 40vh, 360px);
+        --weight-panel-height: clamp(180px, 40dvh, 360px);
+        --weight-panel-space: calc(var(--weight-panel-height) + env(safe-area-inset-bottom, 0px));
+        scroll-padding-top: 52px;
+        scroll-padding-bottom: var(--weight-panel-space);
+    }
+
+    :root.weights-collapsed {
+        --weight-panel-height: 64px;
+    }
+
     body {
         height: auto;
         overflow: auto;
@@ -640,6 +656,67 @@ a:focus-visible {
         height: auto;
         min-height: 100vh;
         flex-direction: column;
+        padding-bottom: var(--weight-panel-space);
+    }
+
+    .weight-panel.group {
+        position: fixed;
+        inset: auto 0 0;
+        z-index: 200;
+        height: var(--weight-panel-space);
+        max-height: calc(100dvh - 60px);
+        display: flex;
+        flex-direction: column;
+        margin: 0;
+        padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+        border: 1px solid #d5dce3;
+        border-radius: 14px 14px 0 0;
+        background: #fff;
+        box-shadow: 0 -4px 20px rgba(44, 62, 80, .18);
+    }
+
+    .weight-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+
+    .weight-panel-header h3 {
+        margin: 0;
+        font-size: 16px;
+    }
+
+    #weight-panel-toggle {
+        display: block;
+        min-width: 64px;
+    }
+
+    .weight-panel-body {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        flex: 1;
+    }
+
+    .weights-collapsed .weight-panel-body {
+        display: none;
+    }
+
+    .weight-panel .weights {
+        min-height: 0;
+        max-height: none;
+        flex: 1;
+        overscroll-behavior-y: contain;
+    }
+
+    .weight-panel-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding-top: 4px;
+        flex-shrink: 0;
     }
 
     .mobile-navigation {

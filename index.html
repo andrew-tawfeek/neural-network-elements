@@ -68,12 +68,19 @@
                 <div id="input-controls"></div>
                 <button onclick="forward()">Forward Pass</button>
             </div>
-            <div class="group">
-                <h3>Weight & Bias Controls</h3>
-                <div class="weights" id="weight-controls"></div>
-                <button onclick="randomize()">Randomize</button>
-                <button onclick="zero()">Zero</button>
-                <button onclick="reset()" class="btn-reset">Reset</button>
+            <div class="group weight-panel" aria-labelledby="weight-panel-title">
+                <div class="weight-panel-header">
+                    <h3 id="weight-panel-title">Weight & Bias Controls</h3>
+                    <button id="weight-panel-toggle" aria-expanded="true" aria-controls="weight-panel-body">Hide</button>
+                </div>
+                <div class="weight-panel-body" id="weight-panel-body">
+                    <div class="weights" id="weight-controls"></div>
+                    <div class="weight-panel-actions">
+                        <button onclick="randomize()">Randomize</button>
+                        <button onclick="zero()">Zero</button>
+                        <button onclick="reset()" class="btn-reset">Reset</button>
+                    </div>
+                </div>
             </div>
             <div class="group">
                 <h3>Training</h3>
